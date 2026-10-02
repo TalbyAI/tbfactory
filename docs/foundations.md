@@ -19,7 +19,7 @@ Initial Workflows and Work Item Types are platform code. Organizations select an
 | TanStack Start | Frontend, protected application operations, and public backend API. |
 | Separate Mastra worker | Workflow and agent execution, using the same platform codebase and domain rules as the web application. |
 | SurrealDB | Primary database for Work Items, Facts, current Factory state, Users, Memberships, permissions, and Artifact metadata. |
-| Mastra storage | Existing SurrealDB adapter if the bounded prototype passes; otherwise a Mastra-supported provider. |
+| Mastra storage | LibSQL selected by the [bounded storage-feasibility investigation](../.scratch/factory-mvp/issues/01-validate-durable-workflow-storage.md). |
 | Persistent file volume | Initial Artifact content storage, accessed under Factory authorization. |
 | External identity provider | Human authentication; the Factory retains ownership of Users, Memberships, and authorization. |
 | Organization AI configuration | Isolated provider credentials, permitted models, and time and call-count limits per Workflow Run. |
@@ -35,8 +35,7 @@ flowchart LR
     Worker["Mastra worker"] <--> DB
     Worker <--> Providers
     Worker <--> AI["Organization-configured AI providers"]
-    Worker <--> Store["Mastra storage: prototype decision"]
-    Store -.->|if validated| DB
+    Worker <--> Store["Mastra storage: LibSQL"]
     Worker <--> Files["Persistent Artifact volume"]
     Web <--> Files
 ```
@@ -93,7 +92,7 @@ See [review/finalization separation](adr/0005-review-and-lifecycle-separation.md
 
 ## Planned Mastra–SurrealDB adapter prototype
 
-Design only; no prototype has been implemented or executed. The accepted timebox is one working day, and the purpose is storage feasibility rather than building the Factory.
+The bounded investigation is complete. Its [resolution and evidence](../.scratch/factory-mvp/issues/01-validate-durable-workflow-storage.md#comments) own the provider decision and dependency pins. The original accepted evaluation plan below remains the scope of that investigation; the purpose is storage feasibility rather than building the Factory.
 
 1. Pin a mutually compatible Node.js, Mastra, adapter, and SurrealDB dependency set in an isolated prototype. Use a disposable database with persistent storage rather than an in-memory database.
 2. Start a minimal Workflow Run with a completed step followed by a human wait. Capture its identifier, stop the application process, then load and resume the same run from a new process; assert that completed work was not repeated and relevant outputs survived.
@@ -108,7 +107,7 @@ Q46 explicitly separates these implementation designs from the accepted foundati
 
 | Follow-up | Decisions and verification required |
 | --- | --- |
-| Adapter prototype | Tested dependency versions, restart and concurrency results, and conditional storage-provider selection. |
+| Adapter prototype | Resolved; dependency pins, executed results, and provider selection are linked from the storage-feasibility ticket. |
 | Domain persistence and API | Data schemas, provider identifiers, duplicate ingestion, atomic state/history updates, command contracts, and ownership enforcement. |
 | Review lifecycle and interaction | Concrete type states, prerequisites, input collection, versioned report decisions, superseded inputs, reruns, and explicit migrations. |
 | Identity and integrations | Identity provider and protocol, User mapping, source-provider credentials, external API authentication, secret storage, and scoped access. |
@@ -116,11 +115,11 @@ Q46 explicitly separates these implementation designs from the accepted foundati
 | Runtime and deployment | Worker scheduling, exclusive ownership, cancellation completion, recovery, provider reconciliation, persistent volumes, and operational checks. |
 | Artifacts and publication | Content/reference versioning, publication destinations, private sharing, expiry/revocation mechanisms, and retention. |
 
-Customer-authored Workflows and configurable approval-rule evaluation remain post-MVP scope. The foundation design itself is complete; the adapter choice is conditional on an unexecuted prototype, and the specifications above are subsequent work.
+Customer-authored Workflows and configurable approval-rule evaluation remain post-MVP scope. The foundation design itself is complete; the conditional storage policy has been resolved by the linked prototype, and the remaining specifications above are subsequent work.
 
 ## Verified technical facts
 
-Checked on 2026-10-01; package adoption and version pinning remain undecided.
+Historical source review checked on 2026-10-01, before package adoption and version pinning. The linked storage-feasibility ticket records the subsequent runtime evaluation and decision; the statements below describe that earlier review.
 
 The [@surrealdb/mastra-ai adapter](https://github.com/surrealdb/mastra-ai/blob/main/README.md), maintained under the SurrealDB organization, documents memory and workflow snapshot storage, including suspend/resume. Its 1.0 line is in beta and declares SurrealDB v3, Node.js 22 or later or Bun, and @mastra/core 1.31.0 or later as requirements. It is a candidate to evaluate, not an adopted or tested dependency in this project.
 
