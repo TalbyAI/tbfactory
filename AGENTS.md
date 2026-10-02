@@ -6,6 +6,12 @@
 - Before defining or changing domain terminology, read [CONTEXT.md](CONTEXT.md) and record agreed terms there in English.
 - Before changing the architecture or project scope, read [docs/foundations.md](docs/foundations.md) and the relevant [ADRs](docs/adr/). Keep accepted decisions distinct from proposals and unresolved questions.
 
+## Git workflow
+
+- Never commit directly to `main` or push changes directly to `origin/main`. All changes to `main` must go through an approved pull request.
+- Before committing, check the current branch. If it is `main`, preserve any uncommitted changes, fetch `origin`, update local `main` to match `origin/main`, then create and switch to a new branch before restoring and committing the changes.
+- If local commits or conflicts prevent synchronizing `main` safely, stop and resolve them without discarding work before creating the new branch.
+
 ## Agent skills
 
 ### Issue tracker
