@@ -12,6 +12,13 @@
 - Before committing, check the current branch. If it is `main`, preserve any uncommitted changes, fetch `origin`, update local `main` to match `origin/main`, then create and switch to a new branch before restoring and committing the changes.
 - If local commits or conflicts prevent synchronizing `main` safely, stop and resolve them without discarding work before creating the new branch.
 
+## Prototypes
+
+- Place each prototype in its own subdirectory under `prototypes/<prototype-name>/`.
+- Keep prototype code, dependencies, manifests, lockfiles, configuration, and tooling inside that subdirectory. Do not add prototype dependencies to production code, repository-root manifests, or other prototypes.
+- Production code and other prototypes must not depend on a prototype. Deleting its subdirectory must leave production code and other prototypes unaffected.
+- Define all prototype commands inside its own subdirectory and run them from there. Do not add repository-root scripts, tasks, or commands for prototypes.
+
 ## Agent skills
 
 ### Issue tracker
