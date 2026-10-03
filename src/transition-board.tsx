@@ -18,9 +18,13 @@ export function TransitionBoard({ organization, user, refreshKey, openItem }: { 
     if (response.status >= 400) throw new Error(response.data.error);
     return response.data;
   }
-  async function all(path: string) {
+  async function all(path: string, firstPage?: { items: View[]; cursor?: string | null }) {
     const rows: View[] = []; let cursor: string | null = null;
-    do { const result = await read(`${path}${cursor ? `${path.includes('?') ? '&' : '?'}cursor=${encodeURIComponent(cursor)}` : ''}`); rows.push(...result.items); cursor = result.cursor; } while (cursor);
+    do {
+      const result: { items: View[]; cursor?: string | null } = firstPage ?? await read(`${path}${cursor ? `${path.includes('?') ? '&' : '?'}cursor=${encodeURIComponent(cursor)}` : ''}`);
+      firstPage = undefined;
+      rows.push(...result.items); cursor = result.cursor ?? null;
+    } while (cursor);
     return rows;
   }
   async function write(path: string, body: Record<string, unknown>) {
@@ -39,7 +43,7 @@ export function TransitionBoard({ organization, user, refreshKey, openItem }: { 
     setTypes(await read(`${base}/work-item-types`));
     for (const [path, setter] of [['teams', setTeams], ['policies', setPolicies]] as const) {
       const response = await uiRead({ data: { path: `${base}/${path}` } });
-      if (response.status === 200) setter(await all(`${base}/${path}`));
+      if (response.status === 200) setter(await all(`${base}/${path}`, response.data));
       else if (response.status === 403) setter(null);
       else throw new Error(response.data.error);
     }
