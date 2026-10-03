@@ -1,6 +1,15 @@
 # TBFactory MVP: pull request review and Work Item finalization
 
 Status: ready-for-agent
+Labels: wayfinder:map
+
+## Destination
+
+Deliver the TBFactory MVP described below, resolving its recorded human checkpoints and feasibility questions before the implementation that depends on them.
+
+## Notes
+
+This existing implementation specification is the first map. Execution is included through its child tickets; the storage-feasibility ticket explicitly authorizes an isolated prototype. Follow the repository's local Markdown tracker, foundations, and canonical domain language. Work through one ticket per session.
 
 ## Problem Statement
 
@@ -8,7 +17,7 @@ Teams need to automate complex work with agents and humans while retaining contr
 
 The Factory must preserve those distinctions across GitHub and Azure DevOps, independent Organizations, long human waits, process restarts, and deployments. Users need a trustworthy history, private Artifacts, and publication that does not silently repeat an external Activity after an uncertain response.
 
-The repository currently contains the domain glossary, accepted foundations, and ten accepted ADRs. It has no application implementation, selected dependency versions, executed adapter prototype, or existing test suite. This specification translates the accepted foundation into MVP behavior and acceptance requirements without inventing the detailed designs explicitly reserved for follow-up specifications.
+The repository contains the domain glossary, accepted foundations, and ten accepted ADRs. The isolated storage-feasibility investigation has executed checks and recorded its selected provider and dependency pins in the linked ticket. It has no production application implementation. This specification translates the accepted foundation into MVP behavior and acceptance requirements without inventing the detailed designs explicitly reserved for follow-up specifications.
 
 ## Solution
 
@@ -125,14 +134,14 @@ Workflow Runs remain exclusive per Work Item during execution and human waits, r
 
 ### Conditional storage decision and required follow-up designs
 
-- Evaluate the existing Mastra-SurrealDB adapter in an isolated, one-working-day prototype using a disposable database with persistent storage and a pinned, mutually compatible dependency set. No dependency versions are selected by this specification.
-- Adopt the adapter only if the restart, resume, output-retention, and concurrency checks pass within the timebox. Otherwise select a Mastra-supported provider and record the failed criterion. LibSQL is a documented fallback candidate, not an adopted dependency. Substantial custom adapter development is excluded.
+- Evaluate the existing Mastra-SurrealDB adapter in an isolated, one-working-day prototype using a disposable database with persistent storage and a pinned, mutually compatible dependency set. The executed result and exact dependency pins belong to the storage-feasibility ticket.
+- Adopt the adapter only if the restart, resume, output-retention, and concurrency checks pass within the timebox. Otherwise select a Mastra-supported provider and record the failed criterion. This policy has been applied in the resolved storage-feasibility ticket indexed below. Substantial custom adapter development is excluded.
 - The adapter result affects Mastra storage only; SurrealDB remains the primary Factory database regardless of that result.
 - The following detailed designs remain unresolved. Their requirements stay within the MVP, and decisions must be recorded before implementation that depends on them:
 
 | Follow-up area | Decisions still required |
 | --- | --- |
-| Adapter prototype | Compatible pinned versions, recorded restart/concurrency evidence, and concrete storage-provider selection. |
+| Adapter prototype | Resolved; use the storage-feasibility ticket's selected provider, pins, and evidence. |
 | Domain persistence and API | Schemas, provider identifiers, duplicate-ingestion mechanism, atomic state/history updates, command contracts, and ownership enforcement. |
 | Review lifecycle and interaction | Concrete type states, prerequisites, input collection, report decision/version handling, superseded inputs, reruns, and explicit migrations. |
 | Identity and integrations | Identity provider and protocol, User mapping, provider credentials, external API authentication, secret storage, and scoped access. |
@@ -159,8 +168,12 @@ No concrete endpoints, schema fields, state names, scheduling algorithm, authent
 - Verify Factory-authorized Artifact access and denial after the sharing limit, expiry where selected, or revocation defined by the follow-up design. Verify configured AI model restrictions and time/call-count limits through observable acceptance, refusal, or stopping behavior according to that design.
 - **Confirmed separate adapter feasibility seam:** use the candidate adapter's public Workflow Run persistence/resume operations against persistent SurrealDB. Complete a step, suspend for human input, capture the run identifier, terminate the application process, and load/resume the same run in a fresh process. Assert output retention and no repeat of completed work. Repeat with a database restart against the same data.
 - The adapter prototype must also verify parallel steps within a run, concurrent runs for different Work Items, retained snapshot results, and recorded simulated external effects. Record exact versions, checks, failures, and effort within one working day. Passing storage checks does not validate Factory authorization, exclusive ownership, or real provider publication recovery.
-- **Prior art:** there are no runnable tests or implementation seams in this repository. The foundations record source review of the adapter's workflow storage integration tests and Mastra's documented cross-process resume behavior; neither is evidence that the required restart/concurrency scenarios have passed here. Reuse public framework operations where feasible rather than introduce a new testing abstraction.
+- **Prior art:** the isolated storage prototype now provides runnable public-framework checks and recorded restart/concurrency evidence. Production Factory test seams are not implemented. Reuse public framework operations where feasible rather than introduce a new testing abstraction.
 - Concrete test tools and fixtures are follow-up implementation choices. Begin with the smallest runnable behavioral checks that cover the selected increment; avoid a speculative collection of component-level suites.
+
+## Decisions so far
+
+- [Validate durable Workflow storage within one working day](issues/01-validate-durable-workflow-storage.md): select LibSQL after the candidate's incremental concurrent-update failure; retain SurrealDB for Factory data.
 
 ## Out of Scope
 
@@ -179,6 +192,6 @@ No concrete endpoints, schema fields, state names, scheduling algorithm, authent
 ## Further Notes
 
 - Source of truth: [accepted foundations](../../docs/foundations.md), [canonical glossary](../../CONTEXT.md), and [accepted ADRs](../../docs/adr/). The foundations record agreement through Q46 on 2026-10-02. All ten ADRs are accepted; no conflicting architecture proposal is introduced here.
-- This is an umbrella MVP specification. Its `ready-for-agent` status is the requested tracker label for the synthesized specification; it does not mean that unresolved implementation designs or conditional dependency choices have been settled. An agent can use it to derive the required bounded follow-up specifications. Implementation that depends on an unresolved choice must first complete the corresponding design.
-- The source's technical investigation was recorded on 2026-10-01. This synthesis does not refresh external documentation, verify current package compatibility, or turn candidate dependencies into adopted ones. The prototype must establish the actual compatible dependency set.
+- This is an umbrella MVP specification. Its `ready-for-agent` status is the requested tracker label for the synthesized specification; the Workflow storage decision is complete as recorded in the linked storage-feasibility ticket, while the other listed implementation designs remain open. An agent can use it to derive the required bounded follow-up specifications. Implementation that depends on an unresolved choice must first complete the corresponding design.
+- The source's technical investigation was recorded on 2026-10-01. This synthesis does not refresh external documentation. The storage prototype selected LibSQL and validated the selected provider's pinned dependency set recorded in the linked storage-feasibility ticket.
 - Publication to the local issue tracker consists of this specification. No external issue system, additional architecture document, or combined implementation-ticket file is needed.
