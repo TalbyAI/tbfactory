@@ -175,6 +175,7 @@ No concrete endpoints, schema fields, state names, scheduling algorithm, authent
 
 - [Validate durable Workflow storage within one working day](issues/01-validate-durable-workflow-storage.md): select LibSQL after the candidate's incremental concurrent-update failure; retain SurrealDB for Factory data.
 - [Create an authenticated, Organization-scoped Work Item](issues/02-authenticated-organization-work-items.md#resolution--2026-10-03): delivered shared authenticated operations, immutable history, bounded Invitations/API credentials and recoverable key ring; public/UI, concurrency, restart and restoration checks pass.
+- [Execute authorized Transition Requests from the Kanban Board and API](issues/03-authorized-transition-requests.md#resolution--2026-10-03): delivered retained state-flow versions, atomic direct transitions, scoped Team policies and durable activity-bound Approval with current authorization rechecks; Workflow execution and explicit migration remain gated by their own issues.
 
 ## Out of Scope
 

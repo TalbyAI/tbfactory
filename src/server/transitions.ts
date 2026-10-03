@@ -1,21 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { digest, fail, identifier, stable, text } from './contracts';
+import { digest, fail, identifier, stable } from './contracts';
 import { authorization, authorized, type Scope } from './authorization';
 import { page } from './factory';
-import { itemDefinition, transitionIds } from './work-item-types';
+import { itemDefinition, transitionIds, transitionInputs } from './work-item-types';
 import { type Caller } from './auth';
 import { type Factory, type Operation } from './factory';
 import { type Row, type Transaction } from './store';
 
-const inputDefinitions = {
-  'prepare-review': z.strictObject({ reviewBrief: text }),
-  'withdraw-review': z.strictObject({ reason: text, readinessFact: identifier }),
-  'request-review': z.strictObject({ reviewBrief: text }),
-  'finalize-review': z.strictObject({ reportVersion: identifier }),
-  'reopen-review': z.strictObject({ reason: text, reviewBrief: text, finalizationFact: identifier }),
-};
-export const transitionRequestSchema = z.strictObject({ operationId: identifier, transition: z.enum(transitionIds), expectedState: identifier, version: z.number().int().positive(), inputs: z.record(z.string(), z.unknown()) }).transform(input => ({ ...input, inputs: inputDefinitions[input.transition].parse(input.inputs) }));
+export const transitionRequestSchema = z.strictObject({ operationId: identifier, transition: z.enum(transitionIds), expectedState: identifier, version: z.number().int().positive(), inputs: z.record(z.string(), z.unknown()) }).transform(input => ({ ...input, inputs: transitionInputs[input.transition].parse(input.inputs) }));
 export const requestActionSchema = z.strictObject({ operationId: identifier });
 export async function boardItem(tx: Transaction, caller: Caller, item: Row) {
   const scope = { organization: String(item.organization), project: String(item.project), repository: item.repository as string | undefined };

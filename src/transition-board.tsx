@@ -51,11 +51,12 @@ export function TransitionBoard({ organization, user, refreshKey, openItem }: { 
   useEffect(() => { void refresh().catch(e => setError((e as Error).message)); }, [refreshKey]);
   const form = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); return new FormData(event.currentTarget); };
   const words = (value: FormDataEntryValue | null) => String(value ?? '').split(',').map(s => s.trim()).filter(Boolean);
+  const states = [...new Set<string>((types?.definitions ?? []).flatMap((definition: any) => definition.states))];
   return <section aria-label="Transition Board"><h2>Kanban Board · pull-request-review</h2>
     <p>Factory state and Workflow Run execution state are displayed separately. Each card uses its retained state-flow version.</p>
     {error && <p role="alert">{error}</p>}{message && <p role="status">{message}</p>}
     <button className="secondary" disabled={busy} onClick={() => void perform(async () => {})}>Refresh board</button>
-    <div className="kanban">{['registered', 'ready-for-review', 'completed'].map(state => <div className="kanban-column" key={state}><h3>{state}</h3>
+    <div className="kanban">{states.map(state => <div className="kanban-column" key={state}><h3>{state}</h3>
       {items.filter(item => item.state === state).map(item => <article key={item.id} aria-label={`Work Item ${item.title}`}>
         <h4>{item.title}</h4><small>{item.id} · state-flow version {item.version}</small>
         <p>Factory state: <strong>{item.state}</strong></p><p>Workflow Run execution state: <strong>{item.workflowRun?.executionState ?? 'No active run'}</strong></p>
@@ -67,7 +68,7 @@ export function TransitionBoard({ organization, user, refreshKey, openItem }: { 
           setMessage(result.completed ? 'State Transition completed.' : 'Transition Request accepted; awaiting Approval. Factory state is unchanged.');
           await openItem(result.workItem);
         }); }}>
-          <h4>{transition.id}</h4>
+          <h4>{transition.id}</h4>{transition.prerequisites.length > 0 && <p>Prerequisites: {transition.prerequisites.join('; ')}</p>}
           {transition.available ? <>{transition.requiresApproval && <p>Activity-bound human Approval required.</p>}{transition.inputs.map((name: string) => <label key={name}>{name}{name.endsWith('Fact') ? <input name={name} required readOnly value={item.readinessFact ?? ''} /> : <textarea name={name} required maxLength={10000} />}</label>)}<button disabled={busy}>Request {transition.id}</button></> : <p>{transition.reason}</p>}
         </form>)}
         {(requests[item.id] ?? []).filter(request => request.status !== 'completed').map(request => <div key={request.id}>
