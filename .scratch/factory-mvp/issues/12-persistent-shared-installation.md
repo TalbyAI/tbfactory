@@ -15,6 +15,7 @@ Deliver a runnable shared server/container installation with separate TanStack S
 ## Acceptance criteria
 
 - [ ] Record deployment, startup recovery, persistent-volume, and operational contracts before implementation; use the validated Workflow storage provider while retaining SurrealDB as the primary Factory database.
+- [ ] Operationalize the accepted policy in the [key-ring backup and recovery plan](../../../docs/operations/key-ring-backup.md): daily database backups, at least 30-day retention, verified ring backups before new-key activation, and monthly restore drills. Configure independent protected recovery storage and separate root-key custody, wire backup monitoring, and demonstrate restore without losing access to encrypted Organization secrets. Record the installation-specific destination and measured recovery-time objective before deployment.
 - [ ] Document installation and operation in English and exercise the public Factory flow with two Organizations, separate processes, real persistent stores, and controllable provider/AI boundaries.
 - [ ] Restart web, worker, and database around human waits and external Activities; retain run identities, outputs, completed effects, and required Workflow/state-flow definitions.
 - [ ] Verify Organization isolation, private and revoked Artifact access, AI configuration boundaries, continued Fact ingestion, cancellation ownership, and uncertain-publication recovery after restart.
@@ -26,4 +27,3 @@ Deliver a runnable shared server/container installation with separate TanStack S
 
 - [Issue 08: Publish an explicitly shared, limited report Artifact](08-limited-report-artifact-sharing.md)
 - [Issue 11: Retain definition versions and explicitly migrate Work Items](11-retained-versions-and-explicit-migration.md)
-

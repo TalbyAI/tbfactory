@@ -157,5 +157,9 @@ vite.config.ts.timestamp-*
 # Astro generated types
 .astro/
 
+# Factory local deployment and acceptance recovery material
+.runtime/
+.tanstack/
+
 # Turbo Repo
 .turbo

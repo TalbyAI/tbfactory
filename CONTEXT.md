@@ -55,8 +55,17 @@ A document or other unstructured source stored by the Factory. A Workflow may sp
 An independent customer boundary with isolated data, credentials, and policies.
 _Avoid_: treating a provider's organization as automatically equivalent to a Factory Organization.
 
+**User**:
+A human participant represented by an identity in the Factory, with independent Memberships and permissions. Distinct external identities initially represent distinct Users, even when they share an email address.
+
 **Membership**:
 A user's belonging to an Organization, independent of that user's memberships in other Organizations.
+
+**Invitation**:
+An offer to an intended recipient to join a specific Organization with explicitly assigned initial permissions. Its authorized activation establishes the recipient's Membership and access within that Organization.
+
+**API Credential**:
+An expiring, revocable credential associated with one User and restricted to one Organization and a maximum set of Activities. Its effective access is bounded by the User's current Membership and permissions; its opaque token is shown once and stored only as a cryptographic digest.
 
 **Service Identity**:
 An Organization-specific execution identity used for automatically initiated Workflow Runs.
