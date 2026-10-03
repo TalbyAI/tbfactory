@@ -2,6 +2,8 @@
 
 Status: ready-for-human
 Type: HITL
+Assignee: Codex
+State: open
 User stories covered: 13, 14, 15, 16, 17, 18, 19, 40, 52, 53, 54, 55, 56, 57, 58, 64, 66
 
 ## Parent
@@ -30,3 +32,8 @@ Human checkpoint: Agree and record the concrete review states, allowed State Tra
 
 - [Issue 02: Create an authenticated, Organization-scoped Work Item](02-authenticated-organization-work-items.md)
 
+## Comments
+
+### 2026-10-03 — Human checkpoint proposal
+
+Issue 02 is closed. Repository exploration confirmed that `pull-request-review` version 1 has only `registered` and no exposed State Transitions. The [authorized Transition Requests design proposal](../designs/authorized-transition-requests.md) records concrete version 2 states, direct and unavailable Workflow-backed requests, inputs and confirmed prerequisites, Approval Points, rerun and migration behavior, atomic persistence, restrictive authorization, and public API/board verification seams. These are proposals pending human agreement; dependent implementation has not started.

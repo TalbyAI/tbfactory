@@ -14,6 +14,7 @@ export async function validateScope(tx: Transaction, organization: string, grant
   if (grant.scope === 'organization' && grant.scopeId === organization) return;
   if (grant.scope === 'user' && (grant.scopeId === user || (await tx.get('membership', membershipId(grant.scopeId, organization)))?.active)) return;
   if ((grant.scope === 'project' || grant.scope === 'repository') && (await tx.get(grant.scope, grant.scopeId))?.organization === organization) return;
+  if (grant.scope === 'team' && (await tx.get('team', grant.scopeId))?.organization === organization) return;
   fail(409, 'Invalid scope ownership');
 }
 

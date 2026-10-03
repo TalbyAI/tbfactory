@@ -13,3 +13,8 @@ small { color: #526c61; } [role=alert] { padding: 12px; background: #fff0e9; bor
 pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; } article { border-top: 1px solid #e0e6e1; padding: 14px 0; }
 .columns { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; } .secret { background: #eff7ef; padding: 14px; overflow-wrap: anywhere; }
 @media(max-width: 680px) { .columns { grid-template-columns: 1fr; gap: 0; } header { align-items: start; gap: 20px; } }
+ .kanban { display: grid; grid-template-columns: repeat(3, minmax(240px, 1fr)); gap: 1rem; overflow-x: auto; margin-block: 1rem; }
+ .kanban-column { background: #f2f5f4; border-radius: 8px; padding: 1rem; }
+ .kanban-column article { background: white; border: 1px solid #d6ded9; padding: 1rem; border-radius: 6px; }
+ details { margin-block: 1rem; }
+ summary { cursor: pointer; font-weight: 600; }

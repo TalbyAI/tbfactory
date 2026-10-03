@@ -19,6 +19,16 @@ function route(url: URL, method: string): Operation {
   if (p.join('/') === 'api/invitations/preview' && method === 'GET') return { action: 'invitation.preview', query };
   if (p[0] !== 'api' || p[1] !== 'organizations' || !p[2]) fail(404, 'Resource not found');
   const base = { organization: p[2], query };
+  if (p[3] === 'teams') {
+    if (p.length === 4 && ['GET', 'POST'].includes(method)) return { ...base, action: method === 'GET' ? 'team.list' : 'team.manage' };
+    if (p.length === 5 && method === 'POST') return { ...base, action: 'team.manage', resource: p[4] };
+  }
+  if (p[3] === 'policies') {
+    if (p.length === 4 && ['GET', 'POST'].includes(method)) return { ...base, action: method === 'GET' ? 'policy.list' : 'policy.manage' };
+    if (p.length === 6 && p[5] === 'remove' && method === 'POST') return { ...base, action: 'policy.remove', resource: p[4] };
+  }
+  if (p.length === 4 && p[3] === 'work-item-types' && ['GET', 'POST'].includes(method)) return { ...base, action: method === 'GET' ? 'type.list' : 'type.manage' };
+  if (p.length === 4 && p[3] === 'board' && method === 'GET') return { ...base, action: 'board' };
   if (p.length === 4 && p[3] === 'projects' && method === 'GET') return { ...base, action: 'projects' };
   if (p[3] === 'api-credentials') {
     if (p.length === 4 && method === 'GET') return { ...base, action: 'credential.list' };
@@ -30,6 +40,8 @@ function route(url: URL, method: string): Operation {
     if (p.length === 6 && p[5] === 'revoke' && method === 'POST') return { ...base, resource: p[4], action: 'invitation.revoke' };
   }
   if (p[3] === 'work-items') {
+    if (p.length === 6 && p[5] === 'transition-requests' && ['GET', 'POST'].includes(method)) return { ...base, resource: p[4], action: method === 'GET' ? 'transition.list' : 'transition.request' };
+    if (p.length === 8 && p[5] === 'transition-requests' && ['approve', 'execute'].includes(p[7]) && method === 'POST') return { ...base, resource: p[4], request: p[6], action: `transition.${p[7]}` };
     if (p.length === 4 && method === 'GET') return { ...base, action: 'work-item.list' };
     if (p.length === 4 && method === 'POST') return { ...base, action: 'work-item.create' };
     if (p.length === 5 && method === 'GET') return { ...base, resource: p[4], action: 'work-item.read' };

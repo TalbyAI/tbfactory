@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { uiRead, uiSession, uiWrite } from '../ui-functions';
+import { TransitionBoard } from '../transition-board';
 
 export const Route = createFileRoute('/')({ loader: () => uiSession(), component: FactoryPage });
 type RecordView = { id: string; [field: string]: any };
@@ -91,6 +92,7 @@ function FactoryPage() {
       {!organizations.length ? <section><h2>No Organization access</h2><p>Your User is authenticated. An operator or an authorized Invitation must establish your Membership before you can access Factory work.</p></section> : <>
         <label>Organization<select disabled={busy} value={organization} onChange={e => void selectOrganization(e.target.value)}><option value="">Select an Organization</option>{organizations.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}</select></label>
         {organization && <>
+          <TransitionBoard key={organization} organization={organization} user={session.user} refreshKey={`${item?.id}:${item?.state}:${item?.transitionSequence ?? 0}`} openItem={async current => { setItem(current); await historyPage(current); }} />
           <section><h2>Create a Work Item</h2><form onSubmit={e => { const data = form(e); void perform(async () => {
             const created = await write(`${base}/work-items`, { project, ...(data.get('repository') ? { repository: data.get('repository') } : {}), title: data.get('title'), type: data.get('type') });
             setItem(created.workItem); await historyPage(created.workItem);
