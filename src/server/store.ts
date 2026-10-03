@@ -74,7 +74,8 @@ export type DatabaseConfig = { url: string; namespace: string; database: string;
 export async function connectStore(config: DatabaseConfig): Promise<Store> {
   const db = new Surreal();
   try {
-  await db.connect(config.url, { namespace: config.namespace, database: config.database, authentication: { username: config.username, password: config.password }, reconnect: { attempts: 8, retryDelay: 250, retryDelayMax: 5000 } });
+  await db.connect(config.url, { authentication: { username: config.username, password: config.password }, reconnect: { attempts: 8, retryDelay: 250, retryDelayMax: 5000 } });
+  await db.use({ namespace: config.namespace, database: config.database });
   for (const [table, definitions] of Object.entries(fields)) {
     await db.query(`DEFINE TABLE IF NOT EXISTS ${table} SCHEMAFULL;` + Object.entries(definitions).map(([field, type]) =>
       `DEFINE FIELD IF NOT EXISTS ${field} ON ${table} TYPE ${type}${type === 'object' || type === 'array<object>' ? ' FLEXIBLE' : ''};`).join(''));
