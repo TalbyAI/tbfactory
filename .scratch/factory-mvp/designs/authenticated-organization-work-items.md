@@ -1,6 +1,6 @@
 # Authenticated, Organization-scoped Work Items
 
-Status: Accepted by the User on 2026-10-03, including the concrete operation and persistence contracts. The live confirmation is recorded in [Create an authenticated, Organization-scoped Work Item](../issues/02-authenticated-organization-work-items.md#comments). No production code or delivered acceptance check exists yet. The alternatives and historical proposal wording below describe the design that was confirmed, not unresolved product decisions.
+Status: Accepted by the User on 2026-10-03, including the concrete operation and persistence contracts. The live confirmation is recorded in [Create an authenticated, Organization-scoped Work Item](../issues/02-authenticated-organization-work-items.md#comments). Implemented and verified on 2026-10-03; see the [delivery evidence](../evidence/authenticated-organization-work-items.md). The alternatives and historical proposal wording below describe the design that was confirmed, not unresolved product decisions.
 
 ## Goal and boundary
 

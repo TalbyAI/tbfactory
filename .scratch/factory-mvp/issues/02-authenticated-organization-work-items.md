@@ -4,7 +4,7 @@ Status: ready-for-agent
 Type: HITL
 Labels: wayfinder:grilling
 Assignee: Codex
-State: open
+State: closed
 User stories covered: 1, 2, 3, 4, 9, 10, 11, 48, 49, 50, 51, 68
 
 ## Parent
@@ -19,16 +19,16 @@ Human checkpoint: Agree the external identity provider/protocol, User mapping, M
 
 ## Acceptance criteria
 
-- [ ] A User can authenticate externally and access each Organization for which the User has an independent Membership; authentication alone grants no Activity permission.
-- [ ] Protected UI operations and the public API can create and retrieve an authorized Work Item with its own identity, exactly one Organization and Project, and an optional Repository. No external source is required.
-- [ ] Each Project belongs to one Organization and each Repository to one Project; mismatched ownership and cross-Organization access are rejected.
-- [ ] Facts cannot be rewritten or deleted through Factory operations. Corrections append new Facts and retain the original occurrences.
-- [ ] A Work Item can reference an external resource without claiming its unique primary correspondence.
-- [ ] Persist Users, Memberships, ownership, Work Items, and history across restart; isolate Organization data, credentials, and policies.
-- [ ] Activate single-use, expiring, revocable Invitations only for the authenticated recipient with the verified invited email; require explicit invitation authority and bounded initial permission grants.
-- [ ] Issue expiring, revocable User-associated API credentials restricted to one Organization and bounded by current Membership and permissions.
-- [ ] Persist an application-managed, versioned key ring protected by a separately supplied deployment root key, and document and exercise backup and restoration of encrypted secrets without silently replacing missing keys.
-- [ ] Provide a runnable public-operation check using two Organizations, independent Memberships, invalid ownership, and append-only corrections, plus a minimal UI create/history scenario.
+- [x] A User can authenticate externally and access each Organization for which the User has an independent Membership; authentication alone grants no Activity permission.
+- [x] Protected UI operations and the public API can create and retrieve an authorized Work Item with its own identity, exactly one Organization and Project, and an optional Repository. No external source is required.
+- [x] Each Project belongs to one Organization and each Repository to one Project; mismatched ownership and cross-Organization access are rejected.
+- [x] Facts cannot be rewritten or deleted through Factory operations. Corrections append new Facts and retain the original occurrences.
+- [x] A Work Item can reference an external resource without claiming its unique primary correspondence.
+- [x] Persist Users, Memberships, ownership, Work Items, and history across restart; isolate Organization data, credentials, and policies.
+- [x] Activate single-use, expiring, revocable Invitations only for the authenticated recipient with the verified invited email; require explicit invitation authority and bounded initial permission grants.
+- [x] Issue expiring, revocable User-associated API credentials restricted to one Organization and bounded by current Membership and permissions.
+- [x] Persist an application-managed, versioned key ring protected by a separately supplied deployment root key, and document and exercise backup and restoration of encrypted secrets without silently replacing missing keys.
+- [x] Provide a runnable public-operation check using two Organizations, independent Memberships, invalid ownership, and append-only corrections, plus a minimal UI create/history scenario.
 
 ## Blocked by
 
@@ -95,3 +95,25 @@ The [authenticated Work Item design](../designs/authenticated-organization-work-
 The User explicitly confirmed the complete concrete design as shared understanding, including the additional choices listed above, and requested implementation in a new session. The design and referenced backup procedure are now accepted; the human checkpoint is complete. Proceed to implementation planning and delivery without reopening confirmed decisions. Investigate current technical API/package facts against primary sources as needed.
 
 The ticket is `ready-for-agent` but remains `State: open` with delivery criteria unchecked. Work on `design/authenticated-organization-work-items` and preserve the existing uncommitted documentation. No application implementation, acceptance tests, design commit, or pull request has been created in this session. Close this issue and add its named resolution link to the parent map only after its own implementation, review, and required checks pass. The scheduled production backup/deployment work remains explicitly owned by the installation ticket.
+
+### Resolution — 2026-10-03
+
+Delivered the accepted production increment on `design/authenticated-organization-work-items`:
+shared protected UI/public operations, configurable OIDC identity, independent Memberships,
+bounded Invitations and API credentials, transactional Work Items and immutable Facts,
+and a protected versioned key ring with verified backup and manual recovery. Existing
+accepted documentation and isolated prototypes were preserved.
+
+All ten criteria are complete. Typechecking, the production build and all 14 behavioral
+tests pass. The production acceptance script passes five groups with real persistent
+SurrealDB, two Organizations, concurrency, process/database restarts, isolated database
+restore and both key versions. The browser create/history and explicit Invitation
+acceptance drills pass. Independent Standards and Spec reviews have no remaining
+actionable findings after corrections. See the [delivery evidence](../evidence/authenticated-organization-work-items.md)
+and [operation runbook](../../../docs/operations/authenticated-work-items.md) for
+coverage, exact commands and limits.
+
+Closed only after these checks. The triage status remains within the canonical status
+vocabulary; lifecycle is recorded by `State: closed`. Deployment scheduling, real
+off-host custody, monitoring, retention and measured recovery time remain owned by
+the installation ticket. No pull request, push to `main`, or deployment is performed.

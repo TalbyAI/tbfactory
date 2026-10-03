@@ -1,6 +1,6 @@
 # Key-ring backup and recovery plan
 
-Status: Accepted initial backup policy and operational procedure, confirmed with the concrete design on 2026-10-03 in [Create an authenticated, Organization-scoped Work Item](../../.scratch/factory-mvp/issues/02-authenticated-organization-work-items.md#comments). No backup tooling or executed restore check exists yet. The recovery destination and measured recovery-time objective are installation-specific.
+Status: Accepted initial backup policy and operational procedure, confirmed with the concrete design on 2026-10-03 in [Create an authenticated, Organization-scoped Work Item](../../.scratch/factory-mvp/issues/02-authenticated-organization-work-items.md#comments). Manual backup/rotation/restore tooling and a real persistent database restore drill were delivered on 2026-10-03; see the [runbook](authenticated-work-items.md) and [delivery evidence](../../.scratch/factory-mvp/evidence/authenticated-organization-work-items.md). Production scheduling, the independent recovery destination and measured recovery-time objective remain installation responsibilities.
 
 ## Responsibility and recovery material
 

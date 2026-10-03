@@ -168,12 +168,13 @@ No concrete endpoints, schema fields, state names, scheduling algorithm, authent
 - Verify Factory-authorized Artifact access and denial after the sharing limit, expiry where selected, or revocation defined by the follow-up design. Verify configured AI model restrictions and time/call-count limits through observable acceptance, refusal, or stopping behavior according to that design.
 - **Confirmed separate adapter feasibility seam:** use the candidate adapter's public Workflow Run persistence/resume operations against persistent SurrealDB. Complete a step, suspend for human input, capture the run identifier, terminate the application process, and load/resume the same run in a fresh process. Assert output retention and no repeat of completed work. Repeat with a database restart against the same data.
 - The adapter prototype must also verify parallel steps within a run, concurrent runs for different Work Items, retained snapshot results, and recorded simulated external effects. Record exact versions, checks, failures, and effort within one working day. Passing storage checks does not validate Factory authorization, exclusive ownership, or real provider publication recovery.
-- **Prior art:** the isolated storage prototype now provides runnable public-framework checks and recorded restart/concurrency evidence. Production Factory test seams are not implemented. Reuse public framework operations where feasible rather than introduce a new testing abstraction.
+- **Prior art:** the isolated storage prototype provides runnable public-framework checks and recorded restart/concurrency evidence. The authenticated Work Item increment now implements production public-operation and minimal UI checks, including persistent restart and key-ring restoration; see its linked resolution below. Workflow/provider execution checks remain subsequent work. Reuse public framework operations where feasible rather than introduce a new testing abstraction.
 - Concrete test tools and fixtures are follow-up implementation choices. Begin with the smallest runnable behavioral checks that cover the selected increment; avoid a speculative collection of component-level suites.
 
 ## Decisions so far
 
 - [Validate durable Workflow storage within one working day](issues/01-validate-durable-workflow-storage.md): select LibSQL after the candidate's incremental concurrent-update failure; retain SurrealDB for Factory data.
+- [Create an authenticated, Organization-scoped Work Item](issues/02-authenticated-organization-work-items.md#resolution--2026-10-03): delivered shared authenticated operations, immutable history, bounded Invitations/API credentials and recoverable key ring; public/UI, concurrency, restart and restoration checks pass.
 
 ## Out of Scope
 

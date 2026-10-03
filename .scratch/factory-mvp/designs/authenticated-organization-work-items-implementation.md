@@ -2,6 +2,9 @@
 
 Baseline: `4430b8c`. Implement the accepted design without changing its decisions.
 
+Completed on 2026-10-03. All six increments, independent reviews and required checks
+are recorded in the [delivery evidence](../evidence/authenticated-organization-work-items.md).
+
 The accepted test seams are public HTTP operations, protected UI server operations,
 OIDC login/callback, operator provisioning, and protected key-ring recovery commands.
 Use a real persistent SurrealDB 3.3.0 process; no in-memory replacement for acceptance.
