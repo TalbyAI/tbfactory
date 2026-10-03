@@ -1,17 +1,20 @@
 import { Surreal, RecordId, type SurrealTransaction } from 'surrealdb';
 
 export type Row = { id: string; [field: string]: unknown };
-export type Table = 'organization' | 'project' | 'repository' | 'user' | 'membership' | 'policy' | 'session' | 'login' | 'work_item' | 'fact' | 'receipt' | 'invitation' | 'credential' | 'audit' | 'secret';
+export type Table = 'organization' | 'project' | 'repository' | 'user' | 'membership' | 'policy' | 'session' | 'login' | 'work_item' | 'fact' | 'receipt' | 'invitation' | 'credential' | 'audit' | 'secret' | 'type_selection' | 'transition_request' | 'team';
 const fields: Record<Table, Record<string, string>> = {
   organization: { name: 'string' },
+  type_selection: { organization: 'string', type: 'string', version: 'number', enabled: 'bool' },
+  team: { organization: 'string', name: 'string', members: 'array<string>' },
+  transition_request: { organization: 'string', workItem: 'string', user: 'string', credential: 'option<string>', transition: 'string', expectedState: 'string', version: 'number', sequence: 'number', inputs: 'object', status: 'string', createdAt: 'number', result: 'option<object>', approval: 'option<object>' },
   project: { organization: 'string', name: 'string' },
   repository: { project: 'string', organization: 'string', name: 'string' },
   user: { issuer: 'string', subject: 'string', email: 'option<string>', verified: 'bool', createdAt: 'number' },
   membership: { user: 'string', organization: 'string', active: 'bool', revokedAt: 'option<number>' },
-  policy: { organization: 'string', user: 'string', scope: 'string', scopeId: 'string', activity: 'string', effect: 'string' },
+  policy: { organization: 'string', user: 'string', team: 'option<string>', scope: 'string', scopeId: 'string', activity: 'string', effect: 'string' },
   session: { digest: 'string', user: 'string', expiresAt: 'number' },
   login: { digest: 'string', verifier: 'string', state: 'string', nonce: 'string', expiresAt: 'number' },
-  work_item: { organization: 'string', project: 'string', repository: 'option<string>', title: 'string', type: 'string', version: 'number', state: 'string', actor: 'string', createdAt: 'number' },
+  work_item: { organization: 'string', project: 'string', repository: 'option<string>', title: 'string', type: 'string', version: 'number', state: 'string', actor: 'string', createdAt: 'number', transitionSequence: 'option<number>', activeRun: 'option<object>' },
   fact: { organization: 'string', workItem: 'string', kind: 'string', payload: 'object', actor: 'string', recordedAt: 'number', correctedFact: 'option<string>' },
   receipt: { organization: 'string', user: 'string', operation: 'string', clientId: 'string', digest: 'string', result: 'object' },
   invitation: { organization: 'string', email: 'string', grants: 'array<object>', issuer: 'string', digest: 'string', issuedAt: 'number', expiresAt: 'number', revoked: 'bool', consumedBy: 'option<string>', consumedAt: 'option<number>' },
@@ -78,7 +81,7 @@ export async function connectStore(config: DatabaseConfig): Promise<Store> {
   await db.use({ namespace: config.namespace, database: config.database });
   for (const [table, definitions] of Object.entries(fields)) {
     await db.query(`DEFINE TABLE IF NOT EXISTS ${table} SCHEMAFULL;` + Object.entries(definitions).map(([field, type]) =>
-      `DEFINE FIELD IF NOT EXISTS ${field} ON ${table} TYPE ${type}${type === 'object' || type === 'array<object>' ? ' FLEXIBLE' : ''};`).join(''));
+      `DEFINE FIELD IF NOT EXISTS ${field} ON ${table} TYPE ${type}${type.includes('object') ? ' FLEXIBLE' : ''};`).join(''));
   }
   for (const [table, columns] of Object.entries({ user: 'issuer, subject', membership: 'user, organization', receipt: 'organization, user, operation, clientId', session: 'digest', login: 'digest', credential: 'digest', invitation: 'digest' })) {
     await db.query(`DEFINE INDEX IF NOT EXISTS unique_identity ON ${table} FIELDS ${columns} UNIQUE;`);

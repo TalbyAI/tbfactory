@@ -6,6 +6,9 @@ import { type Caller } from './auth';
 import { authorized, currentCaller, visible, type Scope } from './authorization';
 import { credentialIssue, credentialMetadata, credentialOperation, revocation } from './credentials';
 import { invitationAccept, invitationIssue, invitationOperation, invitationPreview } from './invitations';
+import { definition, selection, selectionSchema } from './work-item-types';
+import { boardItem, transitionOperation, transitionRequestSchema, requestActionSchema } from './transitions';
+import { managementOperation, managedPolicySchema, teamSchema, removePolicySchema } from './organization-management';
 
 const operationId = { operationId: identifier };
 const creation = z.strictObject({ ...operationId, project: identifier, repository: identifier.optional(), title: text.max(300), type: z.literal('pull-request-review') });
@@ -18,8 +21,11 @@ const reference = z.strictObject({ ...operationId, provider: z.enum(['github', '
   if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || url.port || !github && !azure) context.addIssue({ code: 'custom', message: 'Expected canonical external pull request locator' });
 });
 const reads = z.strictObject({ cursor: z.string().max(1000).optional(), limit: z.coerce.number().int().min(1).max(100).default(30) });
-export type Operation = { action: string; organization?: string; resource?: string; input?: unknown; query?: Record<string, string> };
+export type Operation = { action: string; organization?: string; resource?: string; request?: string; input?: unknown; query?: Record<string, string> };
 const inputSchemas: Record<string, z.ZodType> = {
+  'type.manage': selectionSchema,
+  'team.manage': teamSchema, 'policy.manage': managedPolicySchema, 'policy.remove': removePolicySchema,
+  'transition.request': transitionRequestSchema, 'transition.approve': requestActionSchema, 'transition.execute': requestActionSchema,
   'work-item.create': creation, 'note.append': note, 'correction.append': correction, 'reference.append': reference,
   'credential.issue': credentialIssue, 'credential.revoke': revocation,
   'invitation.issue': invitationIssue, 'invitation.accept': invitationAccept,
@@ -41,10 +47,12 @@ export function page(items: Row[], query: z.infer<typeof reads>, chronological =
 export class Factory {
   constructor(readonly store: Store, readonly settings = { credentialMaximumDays: 90, invitationDays: 7 }) {}
   async execute(caller: Caller, operation: Operation): Promise<any> {
-    const query = reads.parse(operation.action === 'invitation.preview' ? {} : operation.query ?? {});
+    const query = reads.parse(operation.action === 'invitation.preview' ? {} : operation.action === 'board' ? { cursor: operation.query?.cursor, limit: operation.query?.limit } : operation.query ?? {});
+    if (operation.action === 'board') z.strictObject({ type: z.literal('pull-request-review'), cursor: z.string().optional(), limit: z.string().optional() }).parse(operation.query);
     const organization = operation.organization;
     if (organization) identifier.parse(organization);
     if (operation.resource) identifier.parse(operation.resource);
+    if (operation.request) identifier.parse(operation.request);
     const input: any = inputSchemas[operation.action]?.parse(operation.action === 'invitation.preview' ? operation.query : operation.input);
     return this.store.transaction(async tx => {
       await currentCaller(tx, caller);
@@ -61,6 +69,15 @@ export class Factory {
       }
       if (!organization) fail(404, 'Resource not found');
       await visible(tx, caller, organization);
+      if (operation.action.startsWith('team.') || operation.action.startsWith('policy.')) return managementOperation(this, tx, caller, operation, input, query);
+      if (operation.action === 'type.list') {
+        await authorized(tx, caller, 'organization.read', { organization });
+        return { definitions: [definition('pull-request-review', 1), definition('pull-request-review', 2)], selection: await selection(tx, organization) };
+      }
+      if (operation.action === 'type.manage') {
+        await authorized(tx, caller, 'type.manage', { organization });
+        return this.mutate(tx, caller, operation, input, async () => ({ selection: await tx.put('type_selection', { id: organization, organization, type: input.type, version: input.version, enabled: input.enabled }) }));
+      }
       if (operation.action.startsWith('invitation.')) return invitationOperation(this, tx, caller, operation, input, this.settings.invitationDays);
       if (operation.action === 'credential.list') {
         if (!caller.human) fail(403, 'Browser confirmation required');
@@ -84,14 +101,15 @@ export class Factory {
         }
         return page(permitted, query);
       }
-      if (operation.action === 'work-item.list') {
+      if (operation.action === 'work-item.list' || operation.action === 'board') {
         const items = await tx.list('work_item', 'organization = $organization', { organization });
         const permitted: Row[] = [];
         for (const item of items) {
           try { await authorized(tx, caller, 'work-item.read', { organization, project: String(item.project), repository: item.repository as string | undefined }); permitted.push(item); }
           catch (error) { if ((error as { status: number }).status !== 403) throw error; }
         }
-        return page(permitted, query);
+        const selected = page(permitted, query);
+        return operation.action === 'board' ? { ...selected, items: await Promise.all(selected.items.map(item => boardItem(tx, caller, item))) } : selected;
       }
       let scope: Scope = { organization };
       let workItem: Row | undefined;
@@ -110,6 +128,7 @@ export class Factory {
         if (!workItem || workItem.organization !== organization) fail(404, 'Resource not found');
         scope = { organization, project: String(workItem.project), repository: workItem.repository as string | undefined };
       }
+      if (operation.action.startsWith('transition.')) return transitionOperation(this, tx, caller, operation, input, workItem!, scope, query);
       await authorized(tx, caller, operation.action, scope);
       if (operation.action === 'work-item.read') return workItem;
       if (operation.action === 'history.read') return page(await tx.list('fact', 'organization = $organization AND workItem = $workItem', { organization, workItem: workItem!.id }), query, true);
@@ -120,8 +139,11 @@ export class Factory {
       }
       return this.mutate(tx, caller, operation, input, async () => {
         if (operation.action === 'work-item.create') {
-          const workItem = await tx.create('work_item', { id: randomUUID(), organization, project: input.project, repository: input.repository, title: input.title, type: 'pull-request-review', version: 1, state: 'registered', actor: caller.user, createdAt: Date.now() });
-          const fact = await this.fact(tx, caller, workItem, 'work-item.created', { title: input.title, type: workItem.type, version: 1, state: 'registered' });
+          const configured = await selection(tx, organization);
+          if (!configured.enabled) fail(409, 'Work Item Type disabled for creation');
+          const selected = definition(configured.type, configured.version);
+          const workItem = await tx.create('work_item', { id: randomUUID(), organization, project: input.project, repository: input.repository, title: input.title, type: selected.type, version: selected.version, state: 'registered', actor: caller.user, createdAt: Date.now() });
+          const fact = await this.fact(tx, caller, workItem, 'work-item.created', { title: input.title, type: workItem.type, version: selected.version, state: 'registered' });
           return { workItem, fact };
         }
         if (operation.action === 'correction.append') return { fact: await this.fact(tx, caller, workItem!, 'manual.correction', { text: input.text }, input.fact) };
@@ -132,7 +154,7 @@ export class Factory {
   }
   async mutate(tx: Transaction, caller: Caller, operation: Operation, input: any, apply: () => Promise<any>) {
     const id = digest(stable([operation.organization, caller.user, operation.action, input.operationId]));
-    const requestDigest = digest(stable({ resource: operation.resource, input }));
+    const requestDigest = digest(stable({ resource: operation.resource, ...(operation.request ? { request: operation.request } : {}), input }));
     const receipt = await tx.get('receipt', id);
     if (receipt) {
       if (receipt.digest !== requestDigest) fail(409, 'Operation identifier content mismatch');
