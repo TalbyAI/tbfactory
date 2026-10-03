@@ -3,6 +3,22 @@ import assert from 'node:assert/strict';
 import { fixture } from './support/factory.ts';
 import { setPolicy, revokeMembership } from '../src/server/operator.ts';
 
+test('Invitation issuance rejects user-scoped grants without creating Invitations or receipts', async () => {
+  const f = await fixture();
+  try {
+    await f.bootstrap('alpha');
+    await setPolicy(f.store, { activity: 'delegate:organization.read:allow', scope: 'organization', scopeId: 'alpha', effect: 'allow', user: f.alice.user.id, organization: 'alpha' });
+    const input = { operationId: 'user-grant', email: 'bob@example.test', grants: [{ activity: 'organization.read', scope: 'user', scopeId: f.alice.user.id, effect: 'allow' }] };
+    assert.equal((await f.request('/api/organizations/alpha/invitations', input)).status, 422);
+    await f.store.transaction(async tx => {
+      assert.equal((await tx.list('invitation', 'organization = $organization', { organization: 'alpha' })).length, 0);
+      assert.equal((await tx.list('receipt', 'organization = $organization', { organization: 'alpha' })).length, 0);
+    });
+    const corrected = { ...input, grants: [{ ...input.grants[0], scope: 'organization', scopeId: 'alpha' }] };
+    assert.equal((await f.request('/api/organizations/alpha/invitations', corrected)).status, 200);
+  } finally { await f.close(); }
+});
+
 test('Invitations require delegation and verified explicit acceptance, consume once, and never resurrect revoked access on retry', async () => {
   const f = await fixture();
   try {

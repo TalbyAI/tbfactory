@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, writeFile, mkdir } from 'node:fs/promises';
+import fs, { mkdtemp, readFile, writeFile, mkdir } from 'node:fs/promises';
+import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
@@ -44,4 +45,28 @@ test('protected ring setup, rotation, restart and restore retain old keys and bi
   await mkdir(config.directory, { recursive: true });
   await writeFile(join(config.directory, 'writer.lock'), 'operator must resolve');
   await assert.rejects(ring.rotate(), /writer/i);
+  assert.equal(await readFile(join(config.directory, 'writer.lock'), 'utf8'), 'operator must resolve');
+});
+
+test('a failed writer close releases the lock so later key-ring operations can proceed', async context => {
+  const directory = await mkdtemp(join(tmpdir(), 'factory-ring-close-'));
+  const config = { directory: join(directory, 'active'), backupDirectory: join(directory, 'backup'), rootKey: randomBytes(32), installation: 'test-installation', rootVersion: 'root-1' };
+  const ring = new KeyRing(config);
+  await ring.setup();
+  const lock = join(config.directory, 'writer.lock');
+  const open = fs.open;
+  context.mock.method(fs, 'open', async (...args: Parameters<typeof open>) => {
+    const handle = await open(...args);
+    if (args[0] === lock) {
+      const close = handle.close.bind(handle);
+      context.mock.method(handle, 'close', async () => { await close(); throw new Error('Injected writer close failure'); });
+    }
+    return handle;
+  });
+  syncBuiltinESMExports();
+  try {
+    await assert.rejects(ring.rotate(), /Injected writer close failure/);
+    await assert.rejects(readFile(lock), { code: 'ENOENT' });
+  } finally { context.mock.restoreAll(); syncBuiltinESMExports(); }
+  await ring.rotate();
 });

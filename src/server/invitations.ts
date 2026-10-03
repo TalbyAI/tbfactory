@@ -7,7 +7,7 @@ import { type Row, type Transaction } from './store';
 import { authorized, type Scope } from './authorization';
 import { membershipId, validateScope } from './provision';
 
-export const invitationIssue = z.strictObject({ operationId: identifier, email: z.email().max(320), grants: z.array(grantSchema).min(1).max(50) });
+export const invitationIssue = z.strictObject({ operationId: identifier, email: z.email().max(320), grants: z.array(grantSchema.refine(grant => grant.scope !== 'user', 'User-scoped Invitation grants are unsupported')).min(1).max(50) });
 export const invitationAccept = z.strictObject({ operationId: identifier, token: z.string().regex(/^[A-Za-z0-9_-]{43}$/) });
 export const invitationPreview = invitationAccept.omit({ operationId: true });
 export function invitationMetadata(row: Row) {

@@ -58,7 +58,7 @@ export class KeyRing {
     const lock = join(this.config.directory, 'writer.lock');
     const writer = await open(lock, 'wx', 0o600).catch(() => { throw new Error('Key-ring writer already held; operator must resolve stale locks while processes are stopped'); });
     try { await writer.writeFile(String(process.pid)); await writer.sync(); return await action(); }
-    finally { await writer.close(); await unlink(lock); }
+    finally { try { await writer.close(); } finally { await unlink(lock); } }
   }
   private async backup(ring: Ring, content = this.encode(ring)) {
     await mkdir(this.config.backupDirectory, { recursive: true, mode: 0o700 });
