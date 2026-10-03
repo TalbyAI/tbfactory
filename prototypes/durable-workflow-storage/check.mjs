@@ -117,10 +117,17 @@ async function check(provider, name, run) {
 }
 
 async function ready() {
-  for (let attempt = 0; attempt < 100; attempt++) {
-    try { if ((await fetch(surrealUrl.replace('ws:', 'http:') + '/health')).ok) return; }
+  const deadline = performance.now() + 10000;
+  while (performance.now() < deadline) {
+    const remaining = Math.ceil(deadline - performance.now());
+    if (remaining <= 0) break;
+    try {
+      if ((await fetch(surrealUrl.replace('ws:', 'http:') + '/health', {
+        signal: AbortSignal.timeout(Math.min(1000, remaining))
+      })).ok) return;
+    }
     catch { /* Container may still be starting. */ }
-    await delay(100);
+    await delay(Math.max(0, Math.min(100, deadline - performance.now())));
   }
   throw new Error('SurrealDB did not become healthy within 10 seconds');
 }
