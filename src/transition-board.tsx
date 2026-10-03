@@ -36,6 +36,7 @@ export function TransitionBoard({ organization, user, refreshKey, openItem }: { 
     return response.data;
   }
   async function refresh() {
+    setTeams(null); setPolicies(null);
     const cards = await all(`${base}/board?type=pull-request-review`);
     const pending: Record<string, View[]> = {};
     for (const card of cards) pending[card.id] = await all(`${base}/work-items/${card.id}/transition-requests`);
