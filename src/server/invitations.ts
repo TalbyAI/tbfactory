@@ -41,8 +41,6 @@ export async function invitationOperation(factory: Factory, tx: Transaction, cal
       if (invitation.revoked || Number(invitation.expiresAt) <= Date.now()) fail(409, 'Invitation unavailable');
       return { organization: await tx.get('organization', organization), invitation: invitationMetadata(invitation) };
     }
-    const user = (await tx.get('user', caller.user))!;
-    if (!user.verified || user.email !== invitation.email) fail(403, 'Verified invited email required');
     const action = { ...operation, organization };
     return factory.mutate(tx, caller, action, input, async () => {
       const membership = await tx.get('membership', membershipId(caller.user, organization));
@@ -51,6 +49,8 @@ export async function invitationOperation(factory: Factory, tx: Transaction, cal
         // Do not reapply grants or resurrect a subsequently revoked Membership.
         return { membership, activated: true };
       }
+      const user = (await tx.get('user', caller.user))!;
+      if (!user.verified || user.email !== invitation.email) fail(403, 'Verified invited email required');
       if (invitation.revoked || Number(invitation.expiresAt) <= Date.now()) fail(409, 'Invitation unavailable');
       if (membership?.active) fail(409, 'Already a member');
       if (membership?.revokedAt !== undefined && Number(invitation.issuedAt) <= Number(membership.revokedAt)) fail(409, 'Invitation predates Membership revocation');

@@ -23,6 +23,8 @@ test('Invitations require delegation and verified explicit acceptance, consume o
     assert.ok(accepted.every(r => r.status === 200));
     assert.ok(accepted.every(r => r.body.membership.id === accepted[0].body.membership.id));
     assert.equal((await f.request('/api/organizations', undefined, bob.token)).body.items.length, 1);
+    const changedContact = await f.login('bob', false, 'changed@example.test');
+    assert.deepEqual(await f.request('/api/invitations/accept', accept, changedContact.token), accepted[0]);
     await revokeMembership(f.store, { organization: 'alpha', user: bob.user.id });
     assert.equal((await f.request('/api/invitations/accept', accept, bob.token)).status, 200);
     assert.equal((await f.request('/api/organizations', undefined, bob.token)).body.items.length, 0);
@@ -31,6 +33,34 @@ test('Invitations require delegation and verified explicit acceptance, consume o
     const charlie = await f.login('charlie');
     assert.equal((await f.request('/api/invitations/accept', { operationId: 'bad', token: stale.body.token }, charlie.token)).status, 409);
   } finally { await f.close(); }
+});
+
+test('Invitation expiry and loss of delegation reject activation; another User cannot reuse a consumed link', async context => {
+  const f = await fixture();
+  try {
+    await f.bootstrap('alpha');
+    const grant = { activity: 'organization.read', scope: 'organization', scopeId: 'alpha', effect: 'allow' };
+    const delegation = { ...grant, activity: 'delegate:organization.read:allow', user: f.alice.user.id, organization: 'alpha' };
+    await setPolicy(f.store, delegation);
+    const issue = (operationId: string, email: string) => f.request('/api/organizations/alpha/invitations', { operationId, email, grants: [grant] });
+    const expiring = await issue('expiring', 'bob@example.test');
+    context.mock.timers.enable({ apis: ['Date'], now: Date.now() + 8 * 86400000 });
+    const bob = await f.login('bob');
+    assert.equal((await f.request('/api/invitations/accept', { operationId: 'expired', token: expiring.body.token }, bob.token)).status, 409);
+    assert.equal((await f.request('/api/organizations', undefined, bob.token)).body.items.length, 0);
+    context.mock.timers.reset();
+    const invitation = await issue('consume', 'charlie@example.test');
+    const charlie = await f.login('charlie');
+    assert.equal((await f.request('/api/invitations/accept', { operationId: 'accept', token: invitation.body.token }, charlie.token)).status, 200);
+    const different = await f.login('different-subject', true, 'charlie@example.test');
+    assert.equal((await f.request('/api/invitations/accept', { operationId: 'reuse', token: invitation.body.token }, different.token)).status, 409);
+    assert.equal((await f.request('/api/organizations', undefined, different.token)).body.items.length, 0);
+    const lostAuthority = await issue('lost-delegation', 'dave@example.test');
+    const dave = await f.login('dave');
+    await setPolicy(f.store, { ...delegation, effect: 'deny' });
+    assert.equal((await f.request('/api/invitations/accept', { operationId: 'denied', token: lostAuthority.body.token }, dave.token)).status, 403);
+    assert.equal((await f.request('/api/organizations', undefined, dave.token)).body.items.length, 0);
+  } finally { context.mock.timers.reset(); await f.close(); }
 });
 
 test('Invalid recipient, lost issuer authority, existing Membership and stale Invitations have no access side effects', async () => {

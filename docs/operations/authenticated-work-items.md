@@ -39,6 +39,12 @@ Rotation activates only after verification, retains every previous decryption ke
 and uses an exclusive writer lock plus synced temporary-file/rename replacement.
 Readers reload the authoritative ring for each encryption/decryption; they do not
 activate cached generations. Keep required root versions independently accessible.
+POSIX replacements fsync the containing directory after rename. Windows replacements
+use `MoveFileExW` with `MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH`, through a
+hidden, noninteractive Windows PowerShell process. Windows installations require
+PowerShell; failure to perform the durable replacement fails setup/rotation. Paths
+are passed as data, not interpolated shell commands. The mounted storage must honor
+the operating system's flush/write-through guarantees.
 
 `secret-put <protected-json-file>` accepts `organization`, `purpose`, and `value` to
 store server-managed encrypted configuration. `secret-check` verifies all stored
@@ -126,5 +132,7 @@ email trust guarantee.
   document state, nonce and PKCE checks.
 - [Node.js crypto](https://nodejs.org/docs/latest-v24.x/api/crypto.html) supplies authenticated
   AES-GCM encryption; application code owns persistence, backup verification and recovery.
+- [Windows MoveFileExW](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-movefileexw)
+  supplies write-through file replacement where Node cannot synchronize directories.
 - [OpenID Certified oidc-provider](https://github.com/panva/node-oidc-provider) is used only
   as the actual self-hosted provider in acceptance checks.

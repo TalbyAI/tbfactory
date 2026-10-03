@@ -11,7 +11,7 @@ export async function configuredRing() {
   return new KeyRing({ directory: required('FACTORY_RING_DIRECTORY'), backupDirectory: required('FACTORY_RING_BACKUP_DIRECTORY'), rootKey: await readFile(required('FACTORY_ROOT_KEY_FILE')), rootVersion: required('FACTORY_ROOT_KEY_VERSION'), installation: required('FACTORY_INSTALLATION') });
 }
 export function identityConfig() {
-  return { issuer: required('FACTORY_OIDC_ISSUER'), clientId: required('FACTORY_OIDC_CLIENT_ID'), clientSecret: required('FACTORY_OIDC_CLIENT_SECRET'), callback: `${applicationOrigin()}/auth/callback`, allowLoopbackHttp: process.env.FACTORY_ALLOW_LOOPBACK_HTTP === 'true', trustVerifiedEmail: process.env.FACTORY_TRUST_VERIFIED_EMAIL === 'true' };
+  return { issuer: required('FACTORY_OIDC_ISSUER'), clientId: required('FACTORY_OIDC_CLIENT_ID'), clientSecret: required('FACTORY_OIDC_CLIENT_SECRET'), clientAuthentication: z.enum(['client_secret_post', 'client_secret_basic']).parse(process.env.FACTORY_OIDC_AUTH_METHOD ?? 'client_secret_post'), callback: `${applicationOrigin()}/auth/callback`, allowLoopbackHttp: process.env.FACTORY_ALLOW_LOOPBACK_HTTP === 'true', trustVerifiedEmail: process.env.FACTORY_TRUST_VERIFIED_EMAIL === 'true' };
 }
 export function applicationOrigin() {
   const value = required('FACTORY_ORIGIN'); const url = new URL(value);

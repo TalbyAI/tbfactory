@@ -3,7 +3,7 @@ import { digest, fail, token } from './contracts';
 import { userId } from './provision';
 import { type Row, type Store } from './store';
 
-export type OidcConfig = { issuer: string; clientId: string; clientSecret: string; callback: string; allowLoopbackHttp?: boolean; trustVerifiedEmail?: boolean };
+export type OidcConfig = { issuer: string; clientId: string; clientSecret: string; clientAuthentication?: 'client_secret_post' | 'client_secret_basic'; callback: string; allowLoopbackHttp?: boolean; trustVerifiedEmail?: boolean };
 export type Caller = { user: string; human: boolean; organization?: string; activities?: string[]; credential?: string; session?: string };
 
 export class Authentication {
@@ -13,7 +13,8 @@ export class Authentication {
     const callback = new URL(config.callback);
     const loopback = (url: URL) => ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname);
     if ((issuer.protocol !== 'https:' || callback.protocol !== 'https:') && !(config.allowLoopbackHttp && loopback(issuer) && loopback(callback))) throw new Error('OIDC requires HTTPS; explicit loopback HTTP is development-only');
-    const client = await oidc.discovery(issuer, config.clientId, undefined, oidc.ClientSecretPost(config.clientSecret), {
+    const clientAuthentication = config.clientAuthentication === 'client_secret_basic' ? oidc.ClientSecretBasic(config.clientSecret) : oidc.ClientSecretPost(config.clientSecret);
+    const client = await oidc.discovery(issuer, config.clientId, undefined, clientAuthentication, {
       execute: config.allowLoopbackHttp && issuer.protocol === 'http:' ? [oidc.allowInsecureRequests, oidc.enableNonRepudiationChecks] : [oidc.enableNonRepudiationChecks],
     });
     if (client.serverMetadata().issuer !== config.issuer) throw new Error('OIDC issuer mismatch');
@@ -24,7 +25,7 @@ export class Authentication {
     const verifier = oidc.randomPKCECodeVerifier();
     const state = oidc.randomState(); const nonce = oidc.randomNonce();
     await this.store.transaction(tx => tx.create('login', { id: digest(cookie), digest: digest(cookie), verifier, state, nonce, expiresAt: Date.now() + 600000 }));
-    const url = oidc.buildAuthorizationUrl(this.oidc, { redirect_uri: this.config.callback, scope: 'openid email', code_challenge: await oidc.calculatePKCECodeChallenge(verifier), code_challenge_method: 'S256', state, nonce });
+    const url = oidc.buildAuthorizationUrl(this.oidc, { redirect_uri: this.config.callback, scope: 'openid email', prompt: 'login', code_challenge: await oidc.calculatePKCECodeChallenge(verifier), code_challenge_method: 'S256', state, nonce });
     return { cookie, url: url.href };
   }
   async complete(callback: URL, cookie: string | undefined) {

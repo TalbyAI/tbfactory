@@ -1,8 +1,9 @@
 import { createCipheriv, createDecipheriv, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
-import { mkdir, open, readFile, rename, unlink } from 'node:fs/promises';
+import { mkdir, open, readFile, unlink } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { z } from 'zod';
 import { stable } from './contracts';
+import { atomicWrite } from './durable-files';
 
 const secretSchema = z.strictObject({ keyId: z.uuid(), nonce: z.string(), tag: z.string(), ciphertext: z.string() });
 export type Ciphertext = z.infer<typeof secretSchema>;
@@ -26,13 +27,6 @@ function unseal(key: Buffer, encrypted: { nonce: string; tag: string; ciphertext
   decipher.setAAD(Buffer.from(stable(binding))); decipher.setAuthTag(tag);
   return Buffer.concat([decipher.update(Buffer.from(encrypted.ciphertext, 'base64')), decipher.final()]).toString('utf8');
 }
-async function atomicWrite(path: string, content: string) {
-  const temporary = `${path}.${randomUUID()}.tmp`;
-  const file = await open(temporary, 'wx', 0o600);
-  try { await file.writeFile(content); await file.sync(); } finally { await file.close(); }
-  try { await rename(temporary, path); } finally { await unlink(temporary).catch(() => {}); }
-}
-
 export class KeyRing {
   private readonly file: string;
   constructor(private readonly config: RingConfig) {

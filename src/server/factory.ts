@@ -19,6 +19,12 @@ const reference = z.strictObject({ ...operationId, provider: z.enum(['github', '
 });
 const reads = z.strictObject({ cursor: z.string().max(1000).optional(), limit: z.coerce.number().int().min(1).max(100).default(30) });
 export type Operation = { action: string; organization?: string; resource?: string; input?: unknown; query?: Record<string, string> };
+const inputSchemas: Record<string, z.ZodType> = {
+  'work-item.create': creation, 'note.append': note, 'correction.append': correction, 'reference.append': reference,
+  'credential.issue': credentialIssue, 'credential.revoke': revocation,
+  'invitation.issue': invitationIssue, 'invitation.accept': invitationAccept,
+  'invitation.preview': invitationPreview, 'invitation.revoke': revocation,
+};
 
 export function page(items: Row[], query: z.infer<typeof reads>, chronological = false) {
   const key = (r: Row) => chronological ? `${String(r.recordedAt).padStart(16, '0')}:${r.id}` : r.id;
@@ -39,17 +45,7 @@ export class Factory {
     const organization = operation.organization;
     if (organization) identifier.parse(organization);
     if (operation.resource) identifier.parse(operation.resource);
-    let input: any;
-    if (operation.action === 'work-item.create') input = creation.parse(operation.input);
-    else if (operation.action === 'note.append') input = note.parse(operation.input);
-    else if (operation.action === 'correction.append') input = correction.parse(operation.input);
-    else if (operation.action === 'reference.append') input = reference.parse(operation.input);
-    else if (operation.action === 'credential.issue') input = credentialIssue.parse(operation.input);
-    else if (operation.action === 'credential.revoke') input = revocation.parse(operation.input);
-    else if (operation.action === 'invitation.issue') input = invitationIssue.parse(operation.input);
-    else if (operation.action === 'invitation.accept') input = invitationAccept.parse(operation.input);
-    else if (operation.action === 'invitation.preview') input = invitationPreview.parse(operation.query);
-    else if (operation.action === 'invitation.revoke') input = revocation.parse(operation.input);
+    const input: any = inputSchemas[operation.action]?.parse(operation.action === 'invitation.preview' ? operation.query : operation.input);
     return this.store.transaction(async tx => {
       await currentCaller(tx, caller);
       if (['invitation.accept', 'invitation.preview'].includes(operation.action)) return invitationOperation(this, tx, caller, operation, input, this.settings.invitationDays);

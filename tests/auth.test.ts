@@ -12,6 +12,7 @@ test('OIDC login maps exact identities, starts without access, and rejects subst
     const auth = await Authentication.create(store, { issuer: op.issuer, clientId: 'factory', clientSecret: 'fixture-secret', callback: 'http://localhost:3000/auth/callback', allowLoopbackHttp: true });
     async function login() {
       const begin = await auth.begin();
+      assert.equal(new URL(begin.url).searchParams.get('prompt'), 'login');
       const response = await fetch(begin.url, { redirect: 'manual' });
       const callback = new URL(response.headers.get('location')!);
       const session = await auth.complete(callback, begin.cookie);
@@ -29,5 +30,12 @@ test('OIDC login maps exact identities, starts without access, and rejects subst
     op.fault('');
     await auth.logout(first.session.token);
     await assert.rejects(auth.authenticate(first.session.token), /authentication/i);
+    const previousUser = (await login()).session.user.id;
+    op.authMethod('client_secret_basic');
+    const basic = await Authentication.create(store, { issuer: op.issuer, clientId: 'factory', clientSecret: 'fixture-secret', clientAuthentication: 'client_secret_basic', callback: 'http://localhost:3000/auth/callback', allowLoopbackHttp: true });
+    const beginBasic = await basic.begin();
+    const redirected = await fetch(beginBasic.url, { redirect: 'manual' });
+    const completedBasic = await basic.complete(new URL(redirected.headers.get('location')!), beginBasic.cookie).catch(error => { assert.ok(op.checks().authenticated, JSON.stringify(op.checks())); throw error; });
+    assert.equal(completedBasic.user.id, previousUser);
   } finally { await store.close(); await op.close(); }
 });

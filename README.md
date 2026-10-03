@@ -22,13 +22,16 @@ node --env-file=.env .output/server/index.mjs
 Copy `.env.example` into a protected, ignored `.env` and configure the installation.
 Set `PORT` and `HOST` for the Node server. Register the exact callback
 `FACTORY_ORIGIN/auth/callback` with the configured OIDC issuer. The supported client
-authentication method is `client_secret_post`; use HTTPS and Authorization Code Flow
+authentication methods are `client_secret_post` and `client_secret_basic`, selected
+with `FACTORY_OIDC_AUTH_METHOD`; use HTTPS and Authorization Code Flow
 with S256 PKCE. Discovery must match the configured issuer. ID Token signatures,
 audience, lifetime, state and nonce are validated. If email is returned by UserInfo,
 its subject must match the validated ID Token. Missing verified email permits login
 but cannot activate an Invitation. Set `FACTORY_TRUST_VERIFIED_EMAIL=true` only when
 the operator trusts the issuer's email-control verification process. No email-based
 account linking exists; issuer/subject changes require explicit migration.
+Each new browser session requests fresh authentication with OIDC `prompt=login`;
+there is no silent session renewal or refresh-token extension.
 
 The database account, OIDC client secret, root-key file and backup access are bootstrap
 configuration, supplied independently of encrypted Factory data. Restrict the
