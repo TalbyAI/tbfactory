@@ -1,20 +1,145 @@
-:root { color: #192b30; background: #f4f6f3; font-family: system-ui, sans-serif; }
-* { box-sizing: border-box; }
-body { margin: 0; }
-main { max-width: 1040px; margin: auto; padding: 32px 24px 80px; }
-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #bdc9c1; padding-bottom: 20px; margin-bottom: 28px; }
-h1 { font-size: 26px; margin: 0; } h2 { font-size: 20px; } h3 { font-size: 17px; }
-section { background: white; padding: 24px; border: 1px solid #d9e0da; border-radius: 8px; margin: 20px 0; }
-form { display: grid; gap: 14px; } label { display: grid; gap: 6px; font-weight: 600; }
-input, select, textarea, button { font: inherit; } input, select, textarea { padding: 9px; border: 1px solid #aabbb0; border-radius: 4px; width: 100%; }
-button, .button { padding: 9px 15px; border: 1px solid #225e4c; border-radius: 4px; background: #225e4c; color: white; cursor: pointer; width: fit-content; text-decoration: none; }
-button:disabled { opacity: .6; cursor: wait; } .secondary { color: #225e4c; background: white; }
-small { color: #526c61; } [role=alert] { padding: 12px; background: #fff0e9; border-left: 3px solid #aa4732; }
-pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; } article { border-top: 1px solid #e0e6e1; padding: 14px 0; }
-.columns { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; } .secret { background: #eff7ef; padding: 14px; overflow-wrap: anywhere; }
-@media(max-width: 680px) { .columns { grid-template-columns: 1fr; gap: 0; } header { align-items: start; gap: 20px; } }
- .kanban { display: grid; grid-template-columns: repeat(3, minmax(240px, 1fr)); gap: 1rem; overflow-x: auto; margin-block: 1rem; }
- .kanban-column { background: #f2f5f4; border-radius: 8px; padding: 1rem; }
- .kanban-column article { background: white; border: 1px solid #d6ded9; padding: 1rem; border-radius: 6px; }
- details { margin-block: 1rem; }
- summary { cursor: pointer; font-weight: 600; }
+:root {
+  color: #192b30;
+  background: #f4f6f3;
+  font-family: system-ui, sans-serif;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+main {
+  max-width: 1040px;
+  margin: auto;
+  padding: 32px 24px 80px;
+}
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #bdc9c1;
+  padding-bottom: 20px;
+  margin-bottom: 28px;
+}
+h1 {
+  font-size: 26px;
+  margin: 0;
+}
+h2 {
+  font-size: 20px;
+}
+h3 {
+  font-size: 17px;
+}
+section {
+  background: white;
+  padding: 24px;
+  border: 1px solid #d9e0da;
+  border-radius: 8px;
+  margin: 20px 0;
+}
+form {
+  display: grid;
+  gap: 14px;
+}
+label {
+  display: grid;
+  gap: 6px;
+  font-weight: 600;
+}
+input,
+select,
+textarea,
+button {
+  font: inherit;
+}
+input,
+select,
+textarea {
+  padding: 9px;
+  border: 1px solid #aabbb0;
+  border-radius: 4px;
+  width: 100%;
+}
+button,
+.button {
+  padding: 9px 15px;
+  border: 1px solid #225e4c;
+  border-radius: 4px;
+  background: #225e4c;
+  color: white;
+  cursor: pointer;
+  width: fit-content;
+  text-decoration: none;
+}
+button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+.secondary {
+  color: #225e4c;
+  background: white;
+}
+small {
+  color: #526c61;
+}
+[role="alert"] {
+  padding: 12px;
+  background: #fff0e9;
+  border-left: 3px solid #aa4732;
+}
+pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+}
+article {
+  border-top: 1px solid #e0e6e1;
+  padding: 14px 0;
+}
+.columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+.secret {
+  background: #eff7ef;
+  padding: 14px;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 680px) {
+  .columns {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+  header {
+    align-items: start;
+    gap: 20px;
+  }
+}
+.kanban {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(240px, 1fr));
+  gap: 1rem;
+  overflow-x: auto;
+  margin-block: 1rem;
+}
+.kanban-column {
+  background: #f2f5f4;
+  border-radius: 8px;
+  padding: 1rem;
+}
+.kanban-column article {
+  background: white;
+  border: 1px solid #d6ded9;
+  padding: 1rem;
+  border-radius: 6px;
+}
+details {
+  margin-block: 1rem;
+}
+summary {
+  cursor: pointer;
+  font-weight: 600;
+}

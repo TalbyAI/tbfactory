@@ -25,4 +25,3 @@ Deploy updated platform-owned Workflows and Work Item Types while existing runs 
 
 - [Issue 09: Cancel a Workflow Run after a confirmed stop](09-confirmed-workflow-run-cancellation.md)
 - [Issue 10: Finalize a Work Item through the Review Finalization Workflow](10-separate-review-finalization.md)
-

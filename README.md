@@ -42,6 +42,43 @@ host-only, and reference hashed 12-hour sessions. Browser mutations require the 
 configured Origin; logout destroys the session. HTTP loopback requires an explicit
 development-only opt-in and retains secure cookie attributes.
 
+## Formatting
+
+Run these commands from the repository root:
+
+```powershell
+npm run format
+npm run format:check
+```
+
+`format` applies Biome to code and supported configuration files, then applies
+`markdownlint-cli2 --fix` to Markdown. `format:check` verifies both without writing
+files and exits nonzero when formatting or Markdown violations remain. Use
+`format:code`, `format:markdown`, `format:code:check`, or `format:markdown:check` to
+run either tool separately. Some Markdown violations require manual corrections.
+
+Biome uses two-space indentation, a 100-column line width, single quotes in
+JavaScript and TypeScript, double quotes in JSX, semicolons, and LF line endings.
+`.gitattributes` preserves LF when Git checks out text files on every platform.
+Its linter and assist actions are disabled. Markdown uses the default rules except
+the line-length limit (MD013), so existing prose and long links do not need wrapping.
+Repository documentation, including `.scratch/`, is checked. Generated route trees,
+lockfiles, Git-ignored files, and prototypes are excluded from root commands.
+Each prototype owns its formatting commands, configuration, and dependencies; run
+them from that prototype's directory.
+
+Codex must format edited files and verify affected packages before delivering
+changes, as required by [AGENTS.md](AGENTS.md). The `Formatting` GitHub Actions job
+checks both the application and the storage prototype on pull requests targeting
+`main` and pushes to `main`. CI only checks files; it does not fix or commit them.
+Adding another prototype requires its own formatting setup and workflow steps.
+
+To block merges with formatting failures, enable branch protection or a ruleset
+for `main`, require pull requests, and require the `Formatting` status check. The
+repository's current GitHub plan does not support these protections for this
+private repository; CI reports failures, but mandatory merge blocking remains
+pending a compatible plan. Git hooks are not installed by this setup.
+
 ## Operator provisioning
 
 Create a protected JSON file containing `organization`, `projects` (each with optional

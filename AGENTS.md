@@ -21,6 +21,14 @@
 
 ## Agent skills
 
+### Formatting
+
+- After editing code or Markdown files, run the appropriate formatting command from the owning package directory: `npm run format:code` for code and supported configuration files, or `npm run format:markdown` for Markdown. Use `npm run format` when editing both.
+- Resolve any remaining Markdown violations manually without changing the document's meaning. Do not disable rules merely to make a check pass.
+- Before delivering changes, creating a commit, or opening or updating a pull request, run `npm run format:check` in each affected package directory and require it to pass. Repeat formatting and verification after any subsequent edits.
+- Root commands cover the application and repository documentation, including `.scratch/`, and exclude `prototypes/`. Run prototype commands inside the prototype's own directory; keep its dependencies and configurations independent.
+- Do not format generated files, lockfiles, build output, installed dependencies, or captured prototype JSON evidence.
+
 ### Issue tracker
 
 Issues and specs are tracked as local Markdown files under `.scratch/<feature>/`. See `docs/agents/issue-tracker.md`.

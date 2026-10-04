@@ -15,6 +15,29 @@ The checker creates a uniquely named disposable Compose project and RocksDB volu
 
 Exit zero means that a provider was validated and selected by the conditional policy; it does **not** mean that every candidate check passed. Setup, cleanup, or failure of both providers produces a nonzero exit.
 
+## Formatting
+
+Run these commands from this directory:
+
+```powershell
+npm run format
+npm run format:check
+```
+
+Biome formats code and supported configuration files; `markdownlint-cli2 --fix`
+corrects fixable Markdown violations. Resolve remaining Markdown violations
+manually. Use `format:code`, `format:markdown`, `format:code:check`, or
+`format:markdown:check` to run either tool separately. Check commands never write
+files and fail when violations remain.
+
+This prototype owns its pinned development dependencies and configurations;
+it does not inherit the application's formatting configuration. Biome uses
+two-space indentation, a 100-column line width, single quotes, semicolons, and LF
+line endings, with lint and assist actions disabled. Markdown uses default rules
+except the line-length limit (MD013). Git-ignored files, lockfiles, and captured JSON
+reports under `evidence/` are excluded. Root formatting commands exclude this
+entire directory; the `Formatting` CI job checks it separately.
+
 ## Pinned environment
 
 | Component | Executed version |
