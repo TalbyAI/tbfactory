@@ -2,8 +2,10 @@ import { ZodError } from 'zod';
 import { FactoryError, fail } from './contracts';
 import { type Factory, type Operation } from './factory';
 import { type Authentication } from './auth';
+import { type OrganizationSecrets } from './secrets';
+import { ingestObservation } from './observations';
 
-export type Services = { auth: Authentication; factory: Factory; origin: string };
+export type Services = { auth: Authentication; factory: Factory; origin: string; secrets?: OrganizationSecrets; allowLoopbackHttp?: boolean };
 export const sessionCookie = '__Host-factory_session';
 export function cookieValue(request: Request, name: string) {
   return request.headers.get('cookie')?.split(';').map(c => c.trim()).find(c => c.startsWith(`${name}=`))?.slice(name.length + 1);
@@ -55,6 +57,13 @@ function route(url: URL, method: string): Operation {
 export async function handleHttp(request: Request, services: Services): Promise<Response> {
   try {
     const url = new URL(request.url);
+    const sourceRoute = /^\/api\/organizations\/([^/]+)\/sources\/([^/]+)\/observations$/.exec(url.pathname);
+    if (sourceRoute && request.method === 'POST') {
+      const loopback = services.allowLoopbackHttp && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname) && url.origin === services.origin;
+      if (url.protocol !== 'https:' && !loopback) fail(403, 'Source ingestion requires HTTPS');
+      if (!services.secrets) fail(503, 'Source ingestion unavailable');
+      return Response.json(await ingestObservation(services.factory.store, services.secrets, request, sourceRoute[1], sourceRoute[2]), { headers: { 'cache-control': 'no-store' } });
+    }
     const bearer = request.headers.get('authorization');
     if (bearer && !/^Bearer [A-Za-z0-9_-]{43}$/.test(bearer)) fail(401, 'Invalid authentication');
     const caller = await services.auth.authenticate(bearer?.slice(7) ?? cookieValue(request, sessionCookie), Boolean(bearer));

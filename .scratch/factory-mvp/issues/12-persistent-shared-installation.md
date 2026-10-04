@@ -27,3 +27,13 @@ Deliver a runnable shared server/container installation with separate TanStack S
 
 - [Issue 08: Publish an explicitly shared, limited report Artifact](08-limited-report-artifact-sharing.md)
 - [Issue 11: Retain definition versions and explicitly migrate Work Items](11-retained-versions-and-explicit-migration.md)
+
+## Comments
+
+### 2026-10-04 — Provider ingestion runtime verification
+
+Extend Issue 04's built-web/database/ring recovery drill to real running and suspended
+Workflow Runs once installed. Deliver observations from both providers before and
+after worker/database restart; assert appended immutable Facts, unchanged Factory
+state, retained ownership and no overlapping run. Include source credentials,
+correspondence and delivery receipts in installation backups.

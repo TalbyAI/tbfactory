@@ -1,8 +1,11 @@
 import { Surreal, RecordId, type SurrealTransaction } from 'surrealdb';
 
 export type Row = { id: string; [field: string]: unknown };
-export type Table = 'organization' | 'project' | 'repository' | 'user' | 'membership' | 'policy' | 'session' | 'login' | 'work_item' | 'fact' | 'receipt' | 'invitation' | 'credential' | 'audit' | 'secret' | 'type_selection' | 'transition_request' | 'team';
+export type Table = 'organization' | 'project' | 'repository' | 'user' | 'membership' | 'policy' | 'session' | 'login' | 'work_item' | 'fact' | 'receipt' | 'invitation' | 'credential' | 'audit' | 'secret' | 'type_selection' | 'transition_request' | 'team' | 'provider_source' | 'correspondence' | 'observation_delivery';
 const fields: Record<Table, Record<string, string>> = {
+  provider_source: { organization: 'string', source: 'string', project: 'string', repository: 'string', type: 'string', external: 'object', enabled: 'bool', fingerprint: 'string' },
+  correspondence: { organization: 'string', type: 'string', resource: 'string', project: 'string', repository: 'string', workItem: 'string' },
+  observation_delivery: { organization: 'string', type: 'string', resource: 'string', eventId: 'string', digest: 'string', result: 'object' },
   organization: { name: 'string' },
   type_selection: { organization: 'string', type: 'string', version: 'number', enabled: 'bool' },
   team: { organization: 'string', name: 'string', members: 'array<string>' },
@@ -83,7 +86,7 @@ export async function connectStore(config: DatabaseConfig): Promise<Store> {
     await db.query(`DEFINE TABLE IF NOT EXISTS ${table} SCHEMAFULL;` + Object.entries(definitions).map(([field, type]) =>
       `DEFINE FIELD IF NOT EXISTS ${field} ON ${table} TYPE ${type}${type.includes('object') ? ' FLEXIBLE' : ''};`).join(''));
   }
-  for (const [table, columns] of Object.entries({ user: 'issuer, subject', membership: 'user, organization', receipt: 'organization, user, operation, clientId', session: 'digest', login: 'digest', credential: 'digest', invitation: 'digest' })) {
+  for (const [table, columns] of Object.entries({ user: 'issuer, subject', membership: 'user, organization', receipt: 'organization, user, operation, clientId', session: 'digest', login: 'digest', credential: 'digest', invitation: 'digest', provider_source: 'fingerprint', correspondence: 'organization, type, resource', observation_delivery: 'organization, type, resource, eventId' })) {
     await db.query(`DEFINE INDEX IF NOT EXISTS unique_identity ON ${table} FIELDS ${columns} UNIQUE;`);
   }
   return new Store(db);

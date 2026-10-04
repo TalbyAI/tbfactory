@@ -6,6 +6,7 @@ import { revokeMembership, setPolicy } from '../src/server/operator';
 import { OrganizationSecrets } from '../src/server/secrets';
 import { z } from 'zod';
 import { identifier, text } from '../src/server/contracts';
+import { putSource } from '../src/server/observations';
 
 const [command, file] = process.argv.slice(2);
 const store = await connectStore(databaseConfig());
@@ -17,7 +18,8 @@ try {
   else if (command === 'policy-set') result = await setPolicy(store, await input());
   else {
     const ring = await configuredRing(); const secrets = new OrganizationSecrets(store, ring);
-    if (command === 'ring-setup') result = await ring.setup(await secrets.requiredKeys());
+    if (command === 'source-put') result = await putSource(store, secrets, await input());
+    else if (command === 'ring-setup') result = await ring.setup(await secrets.requiredKeys());
     else if (command === 'ring-rotate') { await secrets.verify(); result = await ring.rotate(); }
     else if (command === 'ring-export') result = { protectedBackup: await ring.export() };
     else if (command === 'ring-restore') {

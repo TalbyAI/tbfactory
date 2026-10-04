@@ -9,6 +9,7 @@ import { activities } from '../src/server/contracts';
 import { KeyRing } from '../src/server/key-ring';
 import { OrganizationSecrets } from '../src/server/secrets';
 import { selfHostedProvider, BrowserClient } from './support/provider';
+import { sourceInput, observation, delivery } from './support/observations';
 
 const origin = 'http://localhost:3000';
 const directory = resolve('.runtime', `acceptance-${Date.now()}`); await mkdir(directory, { recursive: true });
@@ -38,6 +39,11 @@ async function startWeb() {
 }
 async function stopWeb() { if (web && web.exitCode === null && web.signalCode === null && !web.killed) { web.kill(); await new Promise<void>(r => web.once('exit', () => r())); } }
 const results: string[] = [];
+const providerDeliveries: { input: ReturnType<typeof sourceInput>; result: { workItemId: string; factId: string } }[] = [];
+async function receive(request: Request) {
+  const response = await fetch(request);
+  return { status: response.status, body: await response.json() as any };
+}
 try {
   for (const [organization, subjects] of [['alpha', ['alice']], ['beta', ['alice', 'bob']]] as const) {
     await provision(store, { organization: { id: organization, name: organization }, projects: [{ id: `${organization}-project`, name: `${organization} Project`, repositories: [{ id: `${organization}-repo`, name: `${organization} Repository` }] }], members: subjects.map(subject => ({ issuer: provider.issuer, subject, grants: [...activities.map(activity => ({ activity, scope: 'organization', scopeId: organization, effect: 'allow' })), ...activities.map(activity => ({ activity: `delegate:${activity}:allow`, scope: 'organization', scopeId: organization, effect: 'allow' }))] })) });
@@ -71,6 +77,25 @@ try {
   assert.equal(issued.status, 200);
   assert.equal((await alice.json(origin, path, undefined, issued.body.token)).status, 200);
   assert.equal((await alice.json(origin, '/api/organizations/beta/projects', undefined, issued.body.token)).status, 404);
+  for (const providerName of ['github', 'azure-devops'] as const) {
+    for (const organization of ['alpha', 'beta']) {
+      const source = sourceInput(providerName, organization);
+      const sourceFile = join(directory, `${organization}-${providerName}-source.json`);
+      await writeFile(sourceFile, JSON.stringify(source), { mode: 0o600 });
+      const installed = JSON.parse(execFileSync(process.execPath, ['--import', 'tsx', 'scripts/operator.ts', 'source-put', sourceFile], { env, windowsHide: true, encoding: 'utf8' }));
+      assert.equal(installed.repository, source.repository);
+      assert.equal(installed.enabled, true);
+      assert.equal(installed.secret, undefined); assert.equal(installed.fingerprint, undefined);
+      const attempts = await Promise.all(Array.from({ length: 4 }, () => receive(delivery(source, observation(providerName)))));
+      assert.ok(attempts.every(attempt => attempt.status === 200 && attempt.body.factId === attempts[0].body.factId), JSON.stringify(attempts));
+      providerDeliveries.push({ input: source, result: attempts[0].body });
+      const facts = await alice.json(origin, `/api/organizations/${organization}/work-items/${attempts[0].body.workItemId}/facts`);
+      assert.equal(facts.body.items.filter((fact: any) => fact.kind === 'external.observation').length, 1);
+      assert.equal(JSON.stringify(facts.body).includes(source.secret), false);
+    }
+  }
+  assert.equal(new Set(providerDeliveries.map(entry => entry.result.workItemId)).size, 4);
+  results.push('Actual source-put operator CLI and production GitHub HMAC/Azure DevOps Basic routes: concurrent deduplication, independent Organizations and private credentials');
   const transitionBase = '/api/organizations/alpha';
   assert.equal((await alice.json(origin, `${transitionBase}/work-item-types`, { operationId: 'type-v2', type: 'pull-request-review', version: 2, enabled: true })).status, 200);
   const transitionItem = await alice.json(origin, base, { ...input, operationId: 'transition-item', title: 'Durable Approval Work Item' });
@@ -94,6 +119,20 @@ try {
   execFileSync('docker', ['restart', 'tbfactory-acceptance-db'], { windowsHide: true, stdio: 'pipe' });
   for (let i = 0; i < 100; i++) { try { if ((await fetch('http://127.0.0.1:18000/health')).ok) break; } catch {} await new Promise(r => setTimeout(r, 100)); }
   store = await connectStore(config); await startWeb();
+  for (const entry of providerDeliveries) {
+    const providerName = entry.input.external.provider;
+    assert.deepEqual((await receive(delivery(entry.input, observation(providerName)))).body, entry.result);
+    const eventId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    const update = observation(providerName, eventId) as any;
+    if (providerName === 'github') { update.action = 'closed'; update.pull_request.state = 'closed'; update.pull_request.merged = true; }
+    else { update.eventType = 'git.pullrequest.updated'; update.resource.status = 'completed'; }
+    assert.equal((await receive(delivery(entry.input, update, eventId))).status, 200);
+    const providerPath = `/api/organizations/${entry.input.organization}/work-items/${entry.result.workItemId}`;
+    const retained = (await alice.json(origin, providerPath)).body;
+    assert.equal(retained.state, 'registered'); assert.equal(retained.version, 1);
+    assert.equal((await alice.json(origin, `${providerPath}/facts`)).body.items.length, 3);
+  }
+  results.push('Both providers retain correspondence, receipts and encrypted source authentication after web/database restart; later closed/completed observations preserve Factory state/version');
   assert.deepEqual((await alice.json(origin, base, input)).body, created.body);
   assert.equal((await alice.json(origin, `${path}/facts`, undefined, issued.body.token)).body.items.length, 3);
   const execution = await alice.json(origin, `${approvalPath}/execute`, { operationId: 'durable-execute' });
@@ -104,7 +143,7 @@ try {
   assert.equal(retainedBoard.body.items.find((card: any) => card.id === item).version, 1);
   assert.deepEqual(retainedBoard.body.items.find((card: any) => card.id === item).transitions, []);
   results.push('Approved request survives web/database restart and completes once; retained version 1 board semantics remain unchanged');
-  assert.equal((await new OrganizationSecrets(store, new KeyRing(ringConfig)).verify()).secrets, 2);
+  assert.equal((await new OrganizationSecrets(store, new KeyRing(ringConfig)).verify()).secrets, 6);
   results.push('Web process and persistent SurrealDB restart retain Users, Memberships, history, receipts, API credential and encrypted secrets');
   await stopWeb();
   const exported = execFileSync('docker', ['exec', 'tbfactory-acceptance-db', '/surreal', 'export', '--log', 'none', '--namespace', config.namespace, '--database', config.database, '--user', 'root', '--pass', 'acceptance-only'], { windowsHide: true, maxBuffer: 10 * 1024 * 1024 });
@@ -118,18 +157,25 @@ try {
     const secrets = new OrganizationSecrets(restoredStore, restoredRing);
     await assert.rejects(restoredRing.restore(olderRing, await secrets.requiredKeys()), /recovery/i);
     await restoredRing.restore(compatibleRing, await secrets.requiredKeys());
-    assert.equal((await secrets.verify()).secrets, 2);
+    assert.equal((await secrets.verify()).secrets, 6);
     assert.equal(await secrets.read('alpha', 'provider'), 'alpha-provider-secret');
     assert.equal(await secrets.read('beta', 'provider'), 'beta-provider-secret');
     env.FACTORY_DATABASE_NAME = restoredConfig.database; env.FACTORY_RING_DIRECTORY = join(directory, 'restored-ring');
     await startWeb();
+    for (const entry of providerDeliveries) {
+      assert.deepEqual((await receive(delivery(entry.input, observation(entry.input.external.provider)))).body, entry.result);
+      const providerPath = `/api/organizations/${entry.input.organization}/work-items/${entry.result.workItemId}`;
+      assert.equal((await alice.json(origin, `${providerPath}/facts`)).body.items.length, 3);
+    }
+    results.push('Both provider sources decrypt and deduplicate after database export/import and protected ring restoration');
     assert.equal((await alice.json(origin, `${path}/facts`)).body.items.length, 3);
     assert.equal((await bob.json(origin, path)).status, 404);
     assert.equal((await alice.json(origin, path, undefined, issued.body.token)).status, 200);
     assert.equal((await alice.json(origin, `/api/organizations/alpha/api-credentials/${issued.body.credential.id}/revoke`, { operationId: 'revoke-restored' })).status, 200);
     assert.equal((await alice.json(origin, path, undefined, issued.body.token)).status, 401);
     results.push('Consistent SurrealDB export/import into isolated database; compatible ring manual restore; both key versions decrypt; cross-Organization isolation and revocation after restore');
-    await writeFile(join(directory, 'results.json'), JSON.stringify({ checkedAt: new Date().toISOString(), database: restoredConfig.database, item, results }, null, 2));
+    await writeFile(join(directory, 'results.json'), JSON.stringify({ checkedAt: new Date().toISOString(), database: restoredConfig.database, item,
+      providerWorkItems: providerDeliveries.map(entry => ({ organization: entry.input.organization, provider: entry.input.external.provider, ...entry.result })), results }, null, 2));
     console.log(JSON.stringify({ passed: results.length, results, evidence: join(directory, 'results.json') }, null, 2));
     if (process.argv.includes('--serve')) {
       console.log('Acceptance application remains available at http://localhost:3000. The local test identity provider accepts any login/password; use alice for two Organizations or newcomer for no access.');

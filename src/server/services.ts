@@ -5,14 +5,15 @@ import { applicationOrigin, configuredRing, databaseConfig, identityConfig, life
 import { OrganizationSecrets } from './secrets';
 import { fail } from './contracts';
 
-let services: Promise<{ auth: Authentication; factory: Factory; origin: string }> | undefined;
+let services: Promise<{ auth: Authentication; factory: Factory; origin: string; secrets: OrganizationSecrets; allowLoopbackHttp: boolean }> | undefined;
 export async function getServices() {
   if (process.env.FACTORY_MAINTENANCE === 'true') fail(503, 'Installation in recovery maintenance');
   services ??= (async () => {
     const store = await connectStore(databaseConfig());
     try {
-      await new OrganizationSecrets(store, await configuredRing()).verify();
-      return { auth: await Authentication.create(store, identityConfig()), factory: new Factory(store, lifetimeSettings()), origin: applicationOrigin() };
+      const secrets = new OrganizationSecrets(store, await configuredRing());
+      await secrets.verify();
+      return { auth: await Authentication.create(store, identityConfig()), factory: new Factory(store, lifetimeSettings()), origin: applicationOrigin(), secrets, allowLoopbackHttp: process.env.FACTORY_ALLOW_LOOPBACK_HTTP === 'true' };
     } catch (error) { await store.close(); throw error; }
   })();
   try { return await services; } catch (error) { services = undefined; throw error; }
