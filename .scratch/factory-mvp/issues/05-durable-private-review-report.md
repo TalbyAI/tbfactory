@@ -30,3 +30,12 @@ Human checkpoint: Agree and record supported AI providers/models, allowed Organi
 - [Issue 01: Validate durable Workflow storage within one working day](01-validate-durable-workflow-storage.md)
 - [Issue 03: Execute authorized Transition Requests from the Kanban Board and API](03-authorized-transition-requests.md)
 
+## Comments
+
+### 2026-10-04 — Provider ingestion runtime verification
+
+Issue 04's [ingestion contract](../designs/provider-observation-ingestion.md) preserves
+the future active/suspended ownership boundary using explicit fixtures. When real
+Workflow Runs become available here, verify that authenticated GitHub and Azure
+DevOps observations append Facts during running and suspended execution without
+changing Factory state or releasing ownership. Repeat with worker recovery in Issue 12.
