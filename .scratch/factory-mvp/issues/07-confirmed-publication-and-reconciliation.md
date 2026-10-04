@@ -28,4 +28,3 @@ Publish human-confirmed review output to the configured GitHub or Azure DevOps c
 
 - [Issue 04: Ingest deduplicated pull request observations from both providers](04-provider-observation-ingestion.md)
 - [Issue 06: Submit and revalidate a consolidated Review Decision](06-current-consolidated-review-decisions.md)
-

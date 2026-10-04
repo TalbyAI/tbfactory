@@ -25,4 +25,3 @@ Let an authorized User request cancellation of a running or suspended Workflow R
 ## Blocked by
 
 - [Issue 05: Generate a private report in a durable Review Workflow](05-durable-private-review-report.md)
-

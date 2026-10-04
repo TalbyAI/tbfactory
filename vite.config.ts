@@ -3,4 +3,6 @@ import { tanstackStart } from '@tanstack/react-start/plugin/vite';
 import react from '@vitejs/plugin-react';
 import { nitro } from 'nitro/vite';
 
-export default defineConfig({ plugins: [tanstackStart(), react(), nitro({ preset: 'node-server' })] });
+export default defineConfig({
+  plugins: [tanstackStart(), react(), nitro({ preset: 'node-server' })],
+});

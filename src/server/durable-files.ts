@@ -27,13 +27,31 @@ export async function atomicWrite(path: string, content: string) {
   const temporary = `${path}.${randomUUID()}.tmp`;
   try {
     const file = await open(temporary, 'wx', 0o600);
-    try { await file.writeFile(content); await file.sync(); } finally { await file.close(); }
+    try {
+      await file.writeFile(content);
+      await file.sync();
+    } finally {
+      await file.close();
+    }
     if (process.platform === 'win32') {
-      await execute('powershell.exe', ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-Command', windowsReplace], { windowsHide: true, env: { ...process.env, FACTORY_REPLACE_SOURCE: temporary, FACTORY_REPLACE_TARGET: path } });
+      await execute(
+        'powershell.exe',
+        ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-Command', windowsReplace],
+        {
+          windowsHide: true,
+          env: { ...process.env, FACTORY_REPLACE_SOURCE: temporary, FACTORY_REPLACE_TARGET: path },
+        },
+      );
     } else {
       await rename(temporary, path);
       const directory = await open(dirname(path), 'r');
-      try { await directory.sync(); } finally { await directory.close(); }
+      try {
+        await directory.sync();
+      } finally {
+        await directory.close();
+      }
     }
-  } finally { await unlink(temporary).catch(() => {}); }
+  } finally {
+    await unlink(temporary).catch(() => {});
+  }
 }

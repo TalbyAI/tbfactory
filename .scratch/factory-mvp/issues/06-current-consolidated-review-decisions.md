@@ -27,4 +27,3 @@ Let an authorized User review a particular report version, confirm or reject all
 ## Blocked by
 
 - [Issue 05: Generate a private report in a durable Review Workflow](05-durable-private-review-report.md)
-

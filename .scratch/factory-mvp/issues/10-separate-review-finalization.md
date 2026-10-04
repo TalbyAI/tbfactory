@@ -24,4 +24,3 @@ Handle an authorized Transition Request by starting the distinct Review Finaliza
 ## Blocked by
 
 - [Issue 07: Publish confirmed Findings and reconcile uncertain outcomes](07-confirmed-publication-and-reconciliation.md)
-

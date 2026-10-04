@@ -1,11 +1,25 @@
 import { Authentication } from './auth';
 import { Factory } from './factory';
 import { connectStore } from './store';
-import { applicationOrigin, configuredRing, databaseConfig, identityConfig, lifetimeSettings } from './config';
+import {
+  applicationOrigin,
+  configuredRing,
+  databaseConfig,
+  identityConfig,
+  lifetimeSettings,
+} from './config';
 import { OrganizationSecrets } from './secrets';
 import { fail } from './contracts';
 
-let services: Promise<{ auth: Authentication; factory: Factory; origin: string; secrets: OrganizationSecrets; allowLoopbackHttp: boolean }> | undefined;
+let services:
+  | Promise<{
+      auth: Authentication;
+      factory: Factory;
+      origin: string;
+      secrets: OrganizationSecrets;
+      allowLoopbackHttp: boolean;
+    }>
+  | undefined;
 export async function getServices() {
   if (process.env.FACTORY_MAINTENANCE === 'true') fail(503, 'Installation in recovery maintenance');
   services ??= (async () => {
@@ -13,8 +27,22 @@ export async function getServices() {
     try {
       const secrets = new OrganizationSecrets(store, await configuredRing());
       await secrets.verify();
-      return { auth: await Authentication.create(store, identityConfig()), factory: new Factory(store, lifetimeSettings()), origin: applicationOrigin(), secrets, allowLoopbackHttp: process.env.FACTORY_ALLOW_LOOPBACK_HTTP === 'true' };
-    } catch (error) { await store.close(); throw error; }
+      return {
+        auth: await Authentication.create(store, identityConfig()),
+        factory: new Factory(store, lifetimeSettings()),
+        origin: applicationOrigin(),
+        secrets,
+        allowLoopbackHttp: process.env.FACTORY_ALLOW_LOOPBACK_HTTP === 'true',
+      };
+    } catch (error) {
+      await store.close();
+      throw error;
+    }
   })();
-  try { return await services; } catch (error) { services = undefined; throw error; }
+  try {
+    return await services;
+  } catch (error) {
+    services = undefined;
+    throw error;
+  }
 }
