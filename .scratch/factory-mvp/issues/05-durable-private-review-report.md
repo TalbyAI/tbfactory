@@ -62,3 +62,14 @@ model/capability validation, Organization-owned OpenRouter keys, and reported
 token/cost accounting are specified using official documentation and the public
 catalog. This provider choice does not approve the remaining checkpoint contracts
 or claim implementation/paid-provider evidence.
+
+### 2026-10-04 — GPT-6 Luna selected
+
+The User selected OpenAI GPT-6 Luna as the initial model through OpenRouter,
+replacing the earlier GPT-4.1 proposal. The updated design uses request ID
+`openai/gpt-6-luna` and retains the observed canonical mapping
+`openai/gpt-6-luna-20260922`. The official public model/endpoint catalog was checked
+on this date: the `openai` upstream declares `response_format` and
+`structured_outputs` support. Provider and initial model selection are agreed;
+remaining checkpoint contracts are still proposed. No paid generation or
+implementation acceptance criterion is claimed.

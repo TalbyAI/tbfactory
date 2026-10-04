@@ -3,12 +3,12 @@
 Status: proposed; pending User agreement at the human checkpoint in
 [Issue 05](../issues/05-durable-private-review-report.md).
 
-Provider selection: OpenRouter, requested by the User on 2026-10-04. The remaining
-contracts below, including the initial model, are still proposed.
+Provider/model selection: OpenRouter with OpenAI GPT-6 Luna, selected by the User
+on 2026-10-04. The remaining checkpoint contracts below are still proposed.
 
 This proposal preserves the accepted foundations, canonical glossary, and ADRs
 0003–0005, 0007–0010. It specifies the dependent implementation; it does not record
-approval or claim executed runtime evidence.
+approval of the remaining checkpoint contracts or claim executed runtime evidence.
 
 ## Approach and alternatives
 
@@ -29,7 +29,7 @@ explicitly rather than silently adding them here.
 
 The production AI gateway is OpenRouter, using its OpenAI-compatible endpoint
 `https://openrouter.ai/api/v1/chat/completions` and an Organization-owned OpenRouter
-API key. The proposed initial model is `openai/gpt-4.1`, routed only to the `openai`
+API key. The selected initial model is `openai/gpt-6-luna`, routed only to the `openai`
 upstream endpoint. Additional catalog entries can be added in reviewed platform
 versions; selecting OpenRouter does not authorize every model it hosts.
 
@@ -42,8 +42,8 @@ fail visibly rather than silently changing model or upstream provider. No arbitr
 endpoints, customer tools, plugins, or custom executable prompts are accepted.
 The platform owns endpoint, routing, and report prompt/schema versions.
 
-On 2026-10-04, OpenRouter's public model catalog lists `openai/gpt-4.1` with
-`canonical_slug: openai/gpt-4.1-2025-04-14`, and its `openai` endpoint declares
+On 2026-10-04, OpenRouter's public model catalog lists `openai/gpt-6-luna` with
+`canonical_slug: openai/gpt-6-luna-20260922`, and its `openai` endpoint declares
 `response_format` and `structured_outputs` support. Retain that expected mapping
 in the platform catalog and run provenance. Before dispatch, verify the current
 catalog mapping and endpoint capabilities against it. Unavailable or changed
@@ -116,7 +116,7 @@ stopped processing or charging for a request.
 Primary sources checked on 2026-10-04:
 
 - [OpenRouter model catalog](https://openrouter.ai/api/v1/models) and
-  [GPT-4.1 endpoints](https://openrouter.ai/api/v1/models/openai/gpt-4.1/endpoints):
+  [GPT-6 Luna endpoints](https://openrouter.ai/api/v1/models/openai/gpt-6-luna/endpoints):
   observed request ID, canonical mapping, and endpoint capabilities.
 - [Provider routing](https://openrouter.ai/docs/guides/routing/provider-selection):
   explicit upstream selection, fallback control, and required parameters.
