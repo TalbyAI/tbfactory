@@ -2,6 +2,8 @@
 
 Status: ready-for-human
 Type: HITL
+Assignee: Codex
+State: open
 User stories covered: 19, 20, 21, 34, 36, 37, 38, 39, 41, 58, 59, 60, 61, 62, 65, 67, 68
 
 ## Parent
@@ -39,3 +41,14 @@ the future active/suspended ownership boundary using explicit fixtures. When rea
 Workflow Runs become available here, verify that authenticated GitHub and Azure
 DevOps observations append Facts during running and suspended execution without
 changing Factory state or releasing ownership. Repeat with worker recovery in Issue 12.
+
+### 2026-10-04 — Human checkpoint proposal
+
+Issues 01 and 03 are closed. Codex claimed this issue and prepared the
+[durable private Review Workflow proposal](../designs/durable-private-review-report.md)
+on `feature/durable-private-review-report`. It specifies the initial AI provider/model,
+Organization configuration, consumption and limits, supplied-code/relevant-input
+contract, execution authorization, single-worker scheduling, exclusive ownership,
+conservative crash recovery, retained Workflow versions, private Artifact access,
+and the already-confirmed public verification seam. User agreement is pending;
+dependent implementation has not started and no acceptance criterion is claimed.
