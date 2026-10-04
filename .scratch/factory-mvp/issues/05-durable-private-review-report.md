@@ -52,3 +52,13 @@ contract, execution authorization, single-worker scheduling, exclusive ownership
 conservative crash recovery, retained Workflow versions, private Artifact access,
 and the already-confirmed public verification seam. User agreement is pending;
 dependent implementation has not started and no acceptance criterion is claimed.
+
+### 2026-10-04 — OpenRouter selected
+
+The User proposed OpenRouter as the AI provider. The design now records OpenRouter
+as the selected gateway, replacing the proposed direct OpenAI integration. The
+initial `openai/gpt-4.1` model remains proposed; explicit routing, disabled fallbacks,
+model/capability validation, Organization-owned OpenRouter keys, and reported
+token/cost accounting are specified using official documentation and the public
+catalog. This provider choice does not approve the remaining checkpoint contracts
+or claim implementation/paid-provider evidence.

@@ -3,6 +3,9 @@
 Status: proposed; pending User agreement at the human checkpoint in
 [Issue 05](../issues/05-durable-private-review-report.md).
 
+Provider selection: OpenRouter, requested by the User on 2026-10-04. The remaining
+contracts below, including the initial model, are still proposed.
+
 This proposal preserves the accepted foundations, canonical glossary, and ADRs
 0003–0005, 0007–0010. It specifies the dependent implementation; it does not record
 approval or claim executed runtime evidence.
@@ -12,10 +15,10 @@ approval or claim executed runtime evidence.
 Recommended: install platform-owned `pull-request-review` Workflow version 1 in a
 separate Mastra worker. Retain SurrealDB for authoritative Factory records, the
 Issue 01-selected LibSQL file for Mastra snapshots, and a persistent private file
-volume for Artifacts. Start with OpenAI and an explicit code patch supplied by the
+volume for Artifacts. Use OpenRouter and an explicit code patch supplied by the
 requester; provider observations supply source versions, not code content.
 
-A multi-provider implementation would require additional credential, response,
+A set of direct provider integrations would require additional credential, response,
 accounting, and failure contracts before it improves this bounded increment. Fetching
 code automatically from GitHub/Azure DevOps would additionally require outbound
 provider credentials, permission checks, and version-consistent retrieval, none of
@@ -24,10 +27,29 @@ explicitly rather than silently adding them here.
 
 ## Organization AI configuration and consumption
 
-The initial production provider is OpenAI Chat Completions, using the exact model
-`gpt-4.1-2025-04-14`. No moving model aliases, arbitrary endpoints, customer tools,
-custom executable prompts, or fallback provider are accepted. The platform keeps
-the endpoint and report prompt/schema version in trusted code.
+The production AI gateway is OpenRouter, using its OpenAI-compatible endpoint
+`https://openrouter.ai/api/v1/chat/completions` and an Organization-owned OpenRouter
+API key. The proposed initial model is `openai/gpt-4.1`, routed only to the `openai`
+upstream endpoint. Additional catalog entries can be added in reviewed platform
+versions; selecting OpenRouter does not authorize every model it hosts.
+
+Send one `model`, never a `models` fallback list, automatic router, preset, or model
+variant. Set `provider.only: ["openai"]`, `provider.order: ["openai"]`,
+`provider.allow_fallbacks: false`, and `provider.require_parameters: true`.
+Require `response_format` with `type: "json_schema"` and `strict: true`; validate
+the returned report independently. Unsupported parameters or an unavailable route
+fail visibly rather than silently changing model or upstream provider. No arbitrary
+endpoints, customer tools, plugins, or custom executable prompts are accepted.
+The platform owns endpoint, routing, and report prompt/schema versions.
+
+On 2026-10-04, OpenRouter's public model catalog lists `openai/gpt-4.1` with
+`canonical_slug: openai/gpt-4.1-2025-04-14`, and its `openai` endpoint declares
+`response_format` and `structured_outputs` support. Retain that expected mapping
+in the platform catalog and run provenance. Before dispatch, verify the current
+catalog mapping and endpoint capabilities against it. Unavailable or changed
+metadata blocks dispatch with `model-unavailable`; do not silently update an
+existing run. This check records advertised identity, not proof of immutable
+upstream weights. A retained Workflow version does not freeze an external service.
 
 An Organization operator configures its AI resources through
 `PUT /api/organizations/{organization}/ai-configuration`, requiring the new
@@ -58,11 +80,17 @@ to existing runs too. The effective call budget is the smaller starting/current
 maximum, and the effective deadline is the earlier starting deadline or first
 generation claim time plus the current maximum seconds.
 
-Persist a call reservation before network dispatch. Every reserved attempt consumes
-one call, including rejected responses, invalid JSON, refusal, timeout, and uncertain
-outcome. Disable hidden SDK retries. Version 1 makes one generation call and may
-retry an explicitly received HTTP 429 or 5xx response, within both budgets; no
-retry follows a timeout, lost connection, or ambiguous process interruption.
+Persist a call reservation before network dispatch. The call budget counts durably
+reserved generation dispatch attempts to OpenRouter. Every reservation consumes
+one call, including a crash before dispatch, rejected responses, invalid JSON,
+refusal, timeout, and uncertain outcome. This conservative count can exceed actual
+Factory HTTP dispatches; it makes no assertion about unobservable internal
+gateway/upstream attempts. Disable SDK retries and OpenRouter model/provider
+fallbacks. Catalog capability reads are not generation calls, but use the same
+remaining generation deadline. Version 1 produces one report and may retry an
+explicitly received HTTP 429 or 5xx response within both budgets. Each retry requires
+a new counted reservation; no retry follows a timeout, lost connection, or ambiguous
+process interruption.
 
 The time budget starts on the first permitted generation claim, after any required
 Activity Approval, and ends on report suspension or confirmed failure. Queue time
@@ -71,19 +99,34 @@ A dispatch uses the remaining time
 as its abort deadline; exhausted budgets prevent a call, and expiration aborts a
 pending call. Do not accept a late response or expose a partial report as complete.
 
-Record attempt ordinal, configured and returned model, provider response/request
-ID when available, start/end times, outcome, and provider-reported input/output/total
-tokens. Missing usage is explicitly unknown, never zero. Aggregate known tokens
-and separately count unknown attempts; this is consumption evidence, not monetary
-billing. Persist observable `call-limit`, `time-limit`, `model-denied`, `ai-refused`,
+Record attempt ordinal, configured and returned model, expected canonical slug,
+routing configuration, OpenRouter generation/request ID and reported upstream
+identity when available, start/end times, outcome, and reported input/output/total
+tokens. Also retain reported cached/reasoning token details and `usage.cost` as a
+decimal USD value when present. Missing usage, cost, or upstream identity is
+explicitly unknown, never zero or inferred from the configured route. Aggregate
+known tokens/cost and separately count unknown attempts; these are provider-reported
+consumption records, not estimated prices or Factory invoices. Accept only returned
+model IDs matching the selected entry's explicit ID/canonical mapping; a mismatch
+stops with `model-denied` and no completed report. Persist observable `call-limit`,
+`time-limit`, `model-denied`, `model-unavailable`, `ai-refused`,
 `invalid-report`, or `outcome-unknown` reasons. Abort does not prove the provider
 stopped processing or charging for a request.
 
-The [OpenAI model catalog](https://developers.openai.com/api/docs/models/gpt-4.1)
-documents this snapshot and structured output support. The
-[Chat Completions reference](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create)
-documents the response and token usage fields. Checked on 2026-10-04; these are
-provider capabilities, not Factory implementation evidence.
+Primary sources checked on 2026-10-04:
+
+- [OpenRouter model catalog](https://openrouter.ai/api/v1/models) and
+  [GPT-4.1 endpoints](https://openrouter.ai/api/v1/models/openai/gpt-4.1/endpoints):
+  observed request ID, canonical mapping, and endpoint capabilities.
+- [Provider routing](https://openrouter.ai/docs/guides/routing/provider-selection):
+  explicit upstream selection, fallback control, and required parameters.
+- [Structured Outputs](https://openrouter.ai/docs/guides/features/structured-outputs):
+  JSON Schema requests and endpoint-specific support.
+- [Usage accounting](https://openrouter.ai/docs/cookbook/administration/usage-accounting):
+  response usage, token details, and reported cost.
+
+These establish documented/advertised gateway contracts, not executed Factory
+generation or a paid-account integration check.
 
 ## Request, code input, and relevant inputs
 
@@ -268,14 +311,17 @@ Reuse the User-confirmed primary seam in the parent specification: public Factor
 HTTP operations with real persistent SurrealDB, a separate worker process,
 persistent LibSQL/Artifact volumes, and controllable external AI evidence. Keep a
 test-only loopback provider available only under explicit acceptance configuration;
-production configuration cannot choose it. Record requests, delays, responses,
+production configuration cannot choose it. Simulate OpenRouter's catalog/endpoint
+and generation contracts. Record requests, routing parameters, delays, responses,
 refusals, malformed output, retryable errors, and ambiguous disconnects at this seam.
 
 Implement vertical red/green slices for concurrent starts and direct-transition
 blocking; explicit User/API/Service Identities and all applicable Team policies;
 Organization operator AI configuration and isolated credentials; generation Approval
 and revoked authority; report/input persistence and no state
-change; empty reports and strict validation; model/time/call limits and consumption;
+change; empty reports and strict validation; Organization model restrictions,
+changed/unavailable canonical mappings, returned-model mismatches, required routing
+and fallback controls, time/call limits, and known/unknown consumption;
 private Artifact authorization including cross-Organization denial; and retained
 human waits across web/worker/SurrealDB restarts. Verify different Work Items can
 execute concurrently and competing worker startup refuses overlap.
