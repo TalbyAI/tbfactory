@@ -11,7 +11,9 @@ An operator configures one enabled destination per Factory Repository with
 provider source, GitHub owner/repository or Azure organization/project/repository,
 and an independent write credential. The source's immutable binding and Work Item
 correspondence determine the pull request; secondary references cannot redirect it.
-Manual Work Items need provider ingestion before publication. Configuration changes
+Manual Work Items without correspondence cannot publish. Provider ingestion creates
+or finds the corresponding Work Item; it does not bind an existing manual Work Item.
+An explicit authorized binding operation is a deferred follow-up. Configuration changes
 receive a new version; rotation of the same credential preserves its version.
 Secrets use OrganizationSecrets with a publication-specific purpose, are never
 returned, and are unavailable to review agents. Disabling configuration revokes
@@ -43,6 +45,11 @@ publication. Selecting it enables new Work Items without silently migrating
 existing ones; explicit migration remains Issue 11. Installed review execution
 continues to support versions 3 and 4.
 
+The User explicitly approved this temporary version-3 limitation on 2026-10-05.
+Changing the Work Item Type version changes relevant inputs and invalidates the
+current report and Review Decision. Issue 11 must require a new review and human
+confirmation unless a separate compatibility contract is explicitly approved.
+
 The existing HTTP/Factory operation seam and installation worker are the public
 flow test seams required by the issue. Checks use real SurrealDB and recorded
 provider HTTP effects; existing review fixtures cover LibSQL and private files.
@@ -57,8 +64,16 @@ the Review Decision; API Credentials cannot. Immediately before dispatch, rechec
 current execution access, Approval authority when applicable, report and decision,
 input versions, source binding, destination version, and credential availability.
 
-One deterministic external Activity per run retains its exact confirmed content,
+One deterministic external Activity per Review Decision in a run retains its exact confirmed content,
 destination, decision, execution identity and numbered attempts in SurrealDB.
+The first Activity retains its existing identifier; replacement Activities use a
+decision-bound identifier. The run identifies the current Activity while prior
+Activities and Facts remain available. Requests for the same decision are idempotent.
+After `skipped` or evidence-backed `not-published`, an authorized User may correct
+a current report's Review Decision when no run owns the Work Item. Publication of
+the corrected decision requires an explicit request, a new Activity and renewed
+authorization and applicable Approval. Execution, uncertainty and completed
+publication prevent correction; modifying already published output is out of scope.
 Reserve an attempt and commit `dispatching` before any provider request; never put
 HTTP effects inside retryable database transactions. Persist completion and its
 immutable Fact atomically with ownership release. Restart/deployment cannot replay
@@ -84,6 +99,19 @@ treated as offering idempotency for these creates.
 Browser User confirmation under `review.recover` is required to resolve completed,
 resolve not-published, or authorize a new attempt. Confirmation identifies the
 latest evidence, records an explanatory reason and checks ownership atomically.
+`completed` requires at least one identified provider effect. All matching IDs
+are retained, including multiple matches exposed as possible duplication.
+`retry` and `not-published` require complete provider evidence without positive
+matches and explicit User confirmation of the provider outcome and stopped execution.
+`not-published` also permits durable local proof that the Factory never authorized
+a POST for the current attempt, even when provider evidence is unavailable. Prior
+attempts must have been resolved through complete evidence and User confirmation
+before retry was authorized, and all prior positive matches still prohibit this resolution.
+A dispatch reservation alone does not prove whether a POST occurred. Retained attempts without this local
+tracking cannot claim the exception. Incomplete or unavailable evidence otherwise
+keeps ownership and the unresolved outcome; there is no manual evidence override.
+Partial positive matches survive subsequent page failures, later queries and
+attempts. A previously observed effect always prohibits retry and `not-published`.
 A new attempt additionally needs current `review.publish` execution authority,
 current Review Decision and renewed applicable Approval; it keeps ownership and
 gets a new attempt marker. Completed recovery may preserve a stale report because
@@ -92,3 +120,13 @@ Competing requests/confirmations serialize through the Activity row and the
 evidence version. Dispatching/reconciling cannot be confirmed or superseded.
 Immutable Facts preserve attempts, evidence, User decisions and completed effects.
 This prevents blind replay; it does not guarantee exactly-once production effects.
+
+## User approval — 2026-10-05
+
+The User approved the auto-grill summary: retain version 4 and its temporary
+version-3 restriction; retain an explicit publication request after review completion
+and reuse the same Workflow Run without replaying review or Mastra snapshots;
+permit corrections after safe terminal nonpublication with a new decision-bound
+Activity; require sufficient recovery evidence and preserve every positive match;
+retain provider correspondence while deferring explicit binding of manual Work Items.
+These are approved implementation decisions, distinct from the broader ADR invariants.

@@ -17,6 +17,7 @@ Deploy updated platform-owned Workflows and Work Item Types while existing runs 
 - [ ] Record version-retention, migration validation, ownership, and persistence contracts before dependent implementation.
 - [ ] Existing Workflow Runs resume under their original Workflow versions after deployment; definitions required by existing runs and Work Items remain available.
 - [ ] Existing Work Items retain their state-flow version and corresponding board semantics until an explicit migration.
+- [ ] Version-3 to version-4 migration invalidates the current report and Review Decision and requires a new review and human confirmation, unless the User explicitly approves a separate compatibility contract. Do not rewrite retained Workflow inputs, decisions, or Approval Facts to make them current.
 - [ ] An authorized migration validates the agreed mapping and prerequisites, records its outcome/history consistently, and respects active-run ownership.
 - [ ] Organizations can select/configure available new definitions without supplying executable code or silently changing existing runs/items.
 - [ ] Provide public-flow and board checks across deployment using a suspended old-version run, an old-version Work Item, new-version work, rejected migration, and successful explicit migration.
@@ -25,3 +26,12 @@ Deploy updated platform-owned Workflows and Work Item Types while existing runs 
 
 - [Issue 09: Cancel a Workflow Run after a confirmed stop](09-confirmed-workflow-run-cancellation.md)
 - [Issue 10: Finalize a Work Item through the Review Finalization Workflow](10-separate-review-finalization.md)
+
+## Comments
+
+### Approved publication compatibility boundary — 2026-10-05
+
+The User approved publication being restricted to version 4 until this explicit
+migration increment. Work Item Type version is a relevant Review Workflow input;
+changing it invalidates existing reports and Review Decisions. Selecting version 4
+only affects new Work Items and does not migrate existing provider correspondence.

@@ -10,7 +10,9 @@ changing Factory state or changing retained Mastra snapshots.
 
 Install an authenticated provider source first using
 [provider observations](provider-observations.md). Its correspondence determines
-the pull request; manual Work Items without correspondence cannot publish.
+the pull request; manual Work Items without correspondence cannot publish. Ingestion
+creates or finds the corresponding Work Item and does not attach correspondence to
+an existing manual Work Item. Explicit authorized binding is deferred.
 Store a protected JSON file outside Git and run:
 
 ```powershell
@@ -72,6 +74,9 @@ importing the pull request. Version 4 declares the publication Approval Point an
 retains version 3's installed Review Workflow and state behavior. Existing Work
 Items keep their version; selection does not migrate them. Versions 1–3 cannot
 publish. Explicit migration remains the separate Issue 11 increment.
+The User approved this temporary limitation. Migration changes relevant inputs:
+require a new review and human confirmation unless a separate compatibility
+contract is explicitly approved. Do not rewrite old reports or decisions.
 
 The User first submits a complete current Review Decision and waits for the Review
 Workflow to complete. Then request publication independently. The UI labels this
@@ -94,6 +99,11 @@ Work Item API endpoints, relative to
 | `publication-reconciliation` | None; queue read-only provider evidence collection. |
 | `publication-confirmation` | Latest `evidence` Fact ID, `resolution`, explanatory `reason`, `confirmedStopped: true`. |
 
+For Approval and recovery, include `publication` with the current Activity ID to
+reject stale commands from an older Activity. Publication requests may include
+`decision` with the expected current Review Decision ID. Existing clients may omit
+these preconditions, but all commands still obey current authorization and ownership.
+
 `GET reviews` returns current publication status plus immutable publication
 history. `GET facts` also retains request, dispatch, failure, evidence, recovery and
 completion Facts. The UI exposes the same outcomes. No Findings means a recorded
@@ -101,6 +111,15 @@ completion Facts. The UI exposes the same outcomes. No Findings means a recorded
 contains only confirmed Finding title, severity, explanation and location. The
 private summary, rejected Findings, rejection reasons and Artifact links are omitted.
 The existing authenticated private Artifact download remains private.
+
+After a `skipped` Activity or evidence-backed `not-published`, an authorized User
+may correct a still-current report's Review Decision when the Work Item has no
+active run. The previous decision, Activity and Facts remain unchanged. Requesting
+publication again creates a new decision-bound Activity and requires current
+execution access and renewed applicable Approval; correction alone never publishes.
+Repeating a request for the same decision returns the existing Activity. Completed
+publication and unresolved execution prevent correction. Changing already published
+comments or threads is outside this increment.
 
 ## Resolve uncertainty
 
@@ -113,13 +132,24 @@ Neither GitHub nor Azure creation is treated as idempotent.
 An authorized browser User with `review.recover` confirms the latest evidence and
 records a reason. Resolutions:
 
-- `completed`: confirm the comment already exists; record completion and release
-  ownership. Matching IDs are retained when available, including the evidence Fact.
+- `completed`: requires an identified effect corroborated by the provider; confirm
+  it already exists, record completion and release ownership. All matching IDs are
+  retained. Multiple matches are visible as possible duplication and prohibit retry.
 - `not-published`: confirm the stopped attempt did not publish and end the Activity.
-  Positive provider matches prohibit this resolution.
+  Requires complete evidence without positive matches, or durable local proof that
+  the Factory never authorized a POST for the current attempt. Previous attempts
+  require complete evidence and User confirmation before authorizing retry, and
+  prior positive matches still prohibit stopping as not published. Older attempts without local tracking
+  cannot claim that exception. Positive provider matches prohibit this resolution.
 - `retry`: explicitly authorize another attempt after verifying the previous attempt
-  stopped and no matching effect exists. This additionally requires current
+  stopped and complete provider evidence has no matching effects. This additionally requires current
   `review.publish`, current relevant inputs and renewed applicable Approval.
+
+Incomplete or unavailable evidence otherwise keeps the outcome unresolved and
+retains ownership. A partial positive match survives a later page failure, an
+unavailable or empty subsequent listing and later attempts. Complete listings without
+matches still need human confirmation and do not establish a provider absence guarantee.
+There is no manual override for insufficient evidence.
 
 The system rejects recovery while dispatch/reconciliation is in progress, stale
 evidence, and competing claims. It never turns matching evidence into automatic
@@ -134,6 +164,12 @@ The replacement marks interrupted provider operations uncertain without replay.
 publication-owned Work Item. Restore SurrealDB, the key ring, worker files and
 private Artifacts consistently using the existing installation recovery procedure.
 
-Verification uses `tests/publications.test.ts` with real review generation,
+Verification uses `tests/publications.test.ts` and `tests/publication-corrections.test.ts` with real review generation,
 SurrealDB, LibSQL, Docker, separate workers and recorded local provider effects.
+`npm run acceptance:publications` exercises the built application with OIDC, rejected
+insufficient recovery, evidence-backed nonpublication, correction, a new Activity,
+lost response and web/database/worker restart while retaining both Activities.
+For browser inspection, run it with `-- --hold-insufficient --hold-correction --hold`;
+each checkpoint prints its state and waits for a line on stdin before continuing
+or closing the final browser session.
 Production provider credentials and live customer pull requests are not test inputs.

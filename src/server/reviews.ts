@@ -5,7 +5,12 @@ import { digest, fail, identifier, stable, text } from './contracts';
 import { type Caller } from './auth';
 import { type Factory, type Operation } from './factory';
 import { type Row, type Transaction } from './store';
-import { publicationView } from './publications';
+import {
+  publicationCanBeCorrected,
+  publicationForRun,
+  publicationView,
+  type Publication,
+} from './publications';
 import { supportsReview } from './work-item-types';
 
 export const reviewFields = z.strictObject({
@@ -331,13 +336,18 @@ export async function reviewOperation(
             .filter((fact) => String(fact.kind).startsWith('publication.'))
             .sort((a, b) => Number(a.recordedAt) - Number(b.recordedAt) || a.id.localeCompare(b.id))
         : [],
-      publications: (
-        await tx.list(
-          'external_activity',
-          'organization = $organization AND workItem = $workItem',
-          { organization: item.organization, workItem: item.id },
-        )
-      ).map(publicationView),
+      publications: await Promise.all(
+        (
+          await tx.list(
+            'external_activity',
+            'organization = $organization AND workItem = $workItem',
+            { organization: item.organization, workItem: item.id },
+          )
+        ).map(async (row) => ({
+          ...publicationView(row),
+          correctionAllowed: permitted && (await publicationCanBeCorrected(tx, row as Publication)),
+        })),
+      ),
       runStatus: await Promise.all(
         runs
           .filter((run) => (run.data as RunData).inputs)
@@ -401,7 +411,8 @@ export async function reviewOperation(
   if (!run || run.organization !== item.organization || run.workItem !== item.id)
     fail(404, 'Resource not found');
   if (operation.action === 'review.decide') {
-    if (run.data.publication) fail(409, 'Publication already binds this Review Decision');
+    if (!(await publicationCanBeCorrected(tx, await publicationForRun(tx, run))))
+      fail(409, 'Publication already binds this Review Decision');
     if (!caller.human) fail(403, 'Human Review Decision required');
     await authorized(tx, caller, 'approval.review-decide', scope);
     await authorized(tx, caller, 'artifact.read', scope);

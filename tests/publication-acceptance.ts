@@ -69,20 +69,112 @@ async function stopWeb() {
   }
   web = undefined;
 }
+function currentPublication(view: any) {
+  const run = view.runs.find((row: any) => row.id === f.run.id);
+  return view.publications.find((row: any) => row.id === run.publication);
+}
+async function browserCheckpoint(stage: string) {
+  if (!process.argv.includes(`--hold-${stage}`)) return;
+  console.log(
+    JSON.stringify({ ready: true, stage, origin, path: f.path, directory: f.r.directory }),
+  );
+  process.stdin.resume();
+  await new Promise<void>((resolve) => process.stdin.once('data', () => resolve()));
+  process.stdin.pause();
+}
 try {
   await startWeb();
   const browser = new BrowserClient();
   await browser.login(origin, 'alice');
-  f.behavior('lost');
+  f.behavior('reject');
   assert.equal(
     (
       await browser.json(origin, `${f.path}/review-publications`, {
-        operationId: 'built-publication',
+        operationId: 'built-initial-publication',
         run: f.run.id,
       })
     ).status,
     200,
   );
+  await f.r.startWorker();
+  await f.wait('failed');
+  f.behavior('evidence-error');
+  assert.equal(
+    (
+      await browser.json(origin, `${f.path}/publication-reconciliation`, {
+        operationId: 'built-unavailable-evidence',
+        run: f.run.id,
+      })
+    ).status,
+    200,
+  );
+  const unavailable = currentPublication(await f.wait('uncertain'));
+  for (const resolution of ['completed', 'retry', 'not-published']) {
+    assert.equal(
+      (
+        await browser.json(origin, `${f.path}/publication-confirmation`, {
+          operationId: `built-insufficient-${resolution}`,
+          run: f.run.id,
+          publication: unavailable.id,
+          evidence: unavailable.evidence,
+          resolution,
+          reason: 'Cannot resolve without sufficient evidence',
+          confirmedStopped: true,
+        })
+      ).status,
+      409,
+    );
+  }
+  await browserCheckpoint('insufficient');
+  f.behavior('success');
+  assert.equal(
+    (
+      await browser.json(origin, `${f.path}/publication-reconciliation`, {
+        operationId: 'built-absence-evidence',
+        run: f.run.id,
+        publication: unavailable.id,
+      })
+    ).status,
+    200,
+  );
+  const absent = currentPublication(await f.wait('uncertain'));
+  assert.equal(
+    (
+      await browser.json(origin, `${f.path}/publication-confirmation`, {
+        operationId: 'built-nonpublication',
+        run: f.run.id,
+        publication: absent.id,
+        evidence: absent.evidence,
+        resolution: 'not-published',
+        reason: 'Verified complete listing and stopped rejected request',
+        confirmedStopped: true,
+      })
+    ).status,
+    200,
+  );
+  await f.r.stopWorker();
+  await browserCheckpoint('correction');
+  const correction = await browser.json(origin, `${f.path}/review-decisions`, {
+    operationId: 'built-corrected-decision',
+    run: f.run.id,
+    reportVersion: f.report.id,
+    replaces: f.decision.id,
+    reviewed: true,
+    findings: f.report.findings.map((finding: any) => ({
+      finding: finding.id,
+      decision: 'confirmed',
+    })),
+  });
+  assert.equal(correction.status, 200);
+  assert.equal(f.posts.length, 1);
+  f.behavior('lost');
+  const publication = await browser.json(origin, `${f.path}/review-publications`, {
+    operationId: 'built-publication',
+    run: f.run.id,
+    decision: correction.body.fact.id,
+  });
+  assert.equal(publication.status, 200);
+  assert.notEqual(publication.body.publication.id, absent.id);
   await f.r.startWorker();
   await f.wait('uncertain');
   assert.equal(f.effects.length, 1);
@@ -97,7 +189,7 @@ try {
     200,
   );
   const uncertain = await f.wait('uncertain'),
-    evidence = uncertain.publications[0].evidence;
+    evidence = currentPublication(uncertain).evidence;
   assert.ok(evidence);
   await stopWeb();
   await f.r.stopWorker();
@@ -109,9 +201,14 @@ try {
   await f.r.startWorker();
   const restored = await browser.json(origin, `${f.path}/reviews`);
   assert.equal(restored.status, 200);
-  assert.equal(restored.body.publications[0].evidence, evidence);
-  assert.equal(restored.body.publications[0].status, 'uncertain');
-  assert.equal(f.posts.length, 1);
+  assert.equal(currentPublication(restored.body).evidence, evidence);
+  assert.equal(currentPublication(restored.body).status, 'uncertain');
+  assert.equal(restored.body.publications.length, 2);
+  assert.equal(
+    restored.body.publications.find((row: any) => row.id === absent.id).status,
+    'not-published',
+  );
+  assert.equal(f.posts.length, 2);
   if (process.argv.includes('--hold')) {
     console.log(
       JSON.stringify({
@@ -129,6 +226,11 @@ try {
       process.on('message', (message) => {
         if (message === 'stop') resolve();
       });
+      process.stdin.resume();
+      process.stdin.once('data', () => {
+        process.stdin.pause();
+        resolve();
+      });
     });
   } else {
     assert.equal(
@@ -136,6 +238,7 @@ try {
         await browser.json(origin, `${f.path}/publication-confirmation`, {
           operationId: 'built-confirmation',
           run: f.run.id,
+          publication: publication.body.publication.id,
           evidence,
           resolution: 'completed',
           reason: 'Verified persisted provider comment and stopped attempt',
@@ -147,7 +250,7 @@ try {
     const completed = await browser.json(origin, f.path);
     assert.equal(completed.body.activeRun, undefined);
     assert.equal(completed.body.state, 'registered');
-    assert.equal(f.posts.length, 1);
+    assert.equal(f.posts.length, 2);
     const artifact = await browser.request(`${origin}${f.path}/reviews/${f.report.id}/artifact`);
     assert.equal(artifact.status, 200);
     const anonymous = await fetch(`${origin}${f.path}/reviews/${f.report.id}/artifact`);
@@ -159,6 +262,9 @@ try {
         {
           passed: true,
           checks: [
+            'built HTTP rejects insufficient completion, retry and nonpublication',
+            'evidence-backed nonpublication and explicit corrected decision',
+            'new decision-bound Activity preserves prior publication history',
             'built HTTP publication and provider lost response',
             'durable provider evidence',
             'web/database/worker restart without replay',

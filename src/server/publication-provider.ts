@@ -229,19 +229,23 @@ export class PublicationProvider {
     return result;
   }
   async evidence(destination: any, key: string, content: string) {
-    await this.verifyRepository(destination, key);
     const matches: ProviderEffect[] = [];
-    for (let page = 1; page <= 20; page++) {
-      const { value, more } = await this.request(destination, key, 'GET', undefined, page);
-      const values = destination.external.provider === 'github' ? value : value.value;
-      if (!Array.isArray(values)) throw Error('Provider evidence unavailable');
-      for (const candidate of values) {
-        const result = effect(destination.external.provider, candidate, content);
-        if (result) matches.push(result);
+    try {
+      await this.verifyRepository(destination, key);
+      for (let page = 1; page <= 20; page++) {
+        const { value, more } = await this.request(destination, key, 'GET', undefined, page);
+        const values = destination.external.provider === 'github' ? value : value.value;
+        if (!Array.isArray(values)) throw Error('Provider evidence unavailable');
+        for (const candidate of values) {
+          const result = effect(destination.external.provider, candidate, content);
+          if (result) matches.push(result);
+        }
+        if (destination.external.provider !== 'github' || (!more && values.length < 100))
+          return { matches, complete: true };
       }
-      if (destination.external.provider !== 'github' || (!more && values.length < 100))
-        return { matches, complete: true };
+      return { matches, complete: false };
+    } catch {
+      return { matches, complete: false, unavailable: true };
     }
-    return { matches, complete: false };
   }
 }

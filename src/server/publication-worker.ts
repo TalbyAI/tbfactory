@@ -4,7 +4,7 @@ import { digest, fail } from './contracts';
 import { type Store, type Transaction } from './store';
 import { type OrganizationSecrets } from './secrets';
 import { authorized } from './authorization';
-import { scopeOf } from './reviews';
+import { scopeOf, type Run } from './reviews';
 import {
   PublicationProvider,
   PublicationRejected,
@@ -13,7 +13,8 @@ import {
 } from './publication-provider';
 import {
   publicationContent,
-  publicationId,
+  publicationForRun,
+  publicationMatches,
   publicationReady,
   publicationState,
   type Publication,
@@ -39,9 +40,15 @@ export class PublicationWorker {
     if (!p || (token && p.data.token !== token)) fail(409, 'Publication attempt ownership lost');
     return p;
   }
+  private async current(tx: Transaction, run: string) {
+    const row = (await tx.get('workflow_run', run)) as Run;
+    const p = row && (await publicationForRun(tx, row));
+    if (!p) fail(404, 'Publication not found');
+    return this.owned(tx, p.id);
+  }
   async recoverInterrupted(run: string) {
     await this.store.transaction(async (tx) => {
-      const p = await this.owned(tx, publicationId(run));
+      const p = await this.current(tx, run);
       if (!['dispatching', 'reconciling'].includes(p.data.status)) return;
       await publicationState(tx, p, 'uncertain', {
         error: 'Interrupted provider operation; gather evidence and obtain User confirmation',
@@ -58,7 +65,7 @@ export class PublicationWorker {
   }
   async process(run: string) {
     const claimed = await this.store.transaction(async (tx) => {
-      const p = await this.owned(tx, publicationId(run));
+      const p = await this.current(tx, run);
       if (!['queued', 'reconciliation-queued'].includes(p.data.status)) return;
       const reconciliation = p.data.status === 'reconciliation-queued';
       const item = (await tx.get('work_item', p.workItem))!;
@@ -107,7 +114,7 @@ export class PublicationWorker {
           return;
         }
       }
-      let key: string;
+      let key: string | undefined;
       try {
         key = await this.secrets.readInTransaction(
           tx,
@@ -115,10 +122,12 @@ export class PublicationWorker {
           publicationPurpose(p.data.destination.credential),
         );
       } catch {
-        await publicationState(tx, p, reconciliation ? 'uncertain' : 'blocked', {
-          error: 'Publication credential unavailable',
-        });
-        return;
+        if (!reconciliation) {
+          await publicationState(tx, p, 'blocked', {
+            error: 'Publication credential unavailable',
+          });
+          return;
+        }
       }
       const updated = await publicationState(
         tx,
@@ -150,6 +159,7 @@ export class PublicationWorker {
     if (reconciliation) {
       let evidence: { matches: unknown[]; complete: boolean; unavailable?: boolean };
       try {
+        if (!key) throw Error('Publication credential unavailable');
         evidence = await this.provider.evidence(p.data.destination, key, content);
       } catch {
         evidence = { matches: [], complete: false, unavailable: true };
@@ -158,6 +168,11 @@ export class PublicationWorker {
         const current = await this.owned(tx, p.id, p.data.token);
         if (current.data.status !== 'reconciling') fail(409, 'Reconciliation ownership lost');
         const item = (await tx.get('work_item', p.workItem))!;
+        const matches = new Map(
+          (await publicationMatches(tx, current)).map((effect) => [effect.id, effect]),
+        );
+        for (const effect of evidence.matches as { id: string; contentDigest: string }[])
+          matches.set(effect.id, effect);
         const fact = await this.factory.fact(
           tx,
           { user: 'worker', human: false },
@@ -169,6 +184,8 @@ export class PublicationWorker {
             attempt: p.data.attempt,
             contentDigest: digest(content),
             ...evidence,
+            matches: [...matches.values()],
+            noDispatch: current.data.dispatchAuthorized === false,
           },
         );
         await publicationState(tx, current, 'uncertain', {
@@ -182,17 +199,30 @@ export class PublicationWorker {
     }
     let effect;
     try {
-      effect = await this.provider.publish(p.data.destination, key, content, () =>
+      effect = await this.provider.publish(p.data.destination, key!, content, () =>
         this.store.transaction(async (tx) => {
           const current = await this.owned(tx, p.id, p.data.token);
           if (current.data.status !== 'dispatching') fail(409, 'Publication ownership lost');
           try {
             await publicationReady(tx, current);
-            return await this.secrets.readInTransaction(
+            const credential = await this.secrets.readInTransaction(
               tx,
               p.organization,
               publicationPurpose(p.data.destination.credential),
             );
+            await tx.put('external_activity', {
+              ...current,
+              data: { ...current.data, dispatchAuthorized: true },
+            });
+            const item = (await tx.get('work_item', p.workItem))!;
+            await this.factory.fact(
+              tx,
+              { user: p.data.identity.user, human: false },
+              item,
+              'publication.dispatch-authorized',
+              { activity: p.id, run: p.run, attempt: p.data.attempt },
+            );
+            return credential;
           } catch {
             throw new PublicationDispatchBlocked(
               'Publication inputs, credentials or execution authority changed before dispatch',
@@ -236,7 +266,7 @@ export class PublicationWorker {
       const current = await this.owned(tx, p.id, p.data.token);
       if (current.data.status !== 'dispatching') fail(409, 'Publication ownership lost');
       const item = (await tx.get('work_item', p.workItem))!;
-      await publicationState(tx, current, 'completed', { effect });
+      await publicationState(tx, current, 'completed', { effect, effects: [effect] });
       await this.factory.fact(
         tx,
         { user: p.data.identity.user, human: false },

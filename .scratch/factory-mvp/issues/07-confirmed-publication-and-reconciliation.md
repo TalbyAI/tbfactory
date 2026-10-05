@@ -96,3 +96,63 @@ Final built acceptance evidence is in ignored
 final browser evidence is in
 `.runtime/review-b3a1f05f-03e0-4924-a308-c30fae264f56/publication-browser-checks.json`.
 This issue is closed.
+
+### Approved auto-grill corrections — 2026-10-05
+
+The User approved the five decisions in the
+[revised contract](../designs/confirmed-publication-and-reconciliation.md#user-approval--2026-10-05).
+Version-4-only publication and explicit requests after review completion using the
+same Workflow Run are now explicit product decisions. Version-3 migration remains
+Issue 11 and requires a new review unless separate compatibility is approved;
+[explicit correspondence for manual Work Items](16-explicit-manual-provider-correspondence.md)
+is deferred. Corrections after safe nonpublication require a new decision-bound
+Activity. Insufficient recovery evidence must retain the unresolved outcome, and
+all positive evidence must survive partial failures and subsequent queries.
+The original verification above describes the earlier implementation; follow-up
+verification is recorded below.
+
+### Approved publication corrections verification — 2026-10-05
+
+Implemented the User-approved boundaries. Corrections after `skipped` or sufficient
+`not-published` evidence preserve the previous Activity and create a new
+decision-bound Activity only on an explicit publication request. Current report
+checks, scoped authority, exclusive ownership and renewed applicable Approval
+remain required. Existing Activity IDs and retained Mastra snapshots remain intact;
+the worker follows the run's current Activity pointer without repeating review.
+
+Recovery completion requires identified provider effects and retains every matching
+ID, exposing possible duplication. Negative resolution and retry require complete
+no-match evidence and explicit User confirmation; durable proof of no authorized
+POST for the current attempt permits stopping even when credentials or provider
+evidence are unavailable. Prior positive matches survive page failures, later
+listings and attempts and prohibit negative resolution or retry. Existing attempts
+without local dispatch tracking cannot infer that exception. UI commands carry
+Activity/decision preconditions, and private correction eligibility requires Artifact access.
+
+Independent code review found two recovery gaps: tracking reset for a new attempt
+and missing-credential evidence persistence. Both were corrected with failing
+regressions followed by passing checks. Final review has no actionable findings.
+
+Verification:
+
+- `npm test`: 120 passing checks, including 38 publication checks and 17 new
+  regressions across both providers. Covers corrected decisions, concurrent requests,
+  separate renewed Approval, stale Activity commands, preserved history, insufficient
+  evidence, partial positive matches, multiple effects, unavailable credentials,
+  per-attempt dispatch proof, private eligibility and restart without replay.
+- `npm run typecheck`, `npm run build` and `npm run format:check`: pass.
+- `npm run acceptance:publications`: built HTTP/OIDC flow passes through insufficient
+  recovery rejection, confirmed nonpublication, correction, new Activity, lost
+  response, web/database/worker restart, identified completion, unchanged Factory
+  state and authenticated private Artifact access.
+- Collaborative browser checks pass for unavailable evidence with no recovery or
+  correction form, correction after safe nonpublication, completion-only recovery
+  for an identified effect, required reason/stopped confirmation, preserved prior
+  Activity and released ownership after confirmation.
+
+Built acceptance evidence is in ignored
+`.runtime/review-7848f5eb-9909-4a45-8761-f567d9edd461/publication-acceptance.json`.
+Browser evidence is in ignored
+`.runtime/review-d4b7ab5d-ead5-47ff-939a-afc174e0680f/publication-browser-checks.json`.
+Recorded local provider effects do not establish production exactly-once guarantees.
+Issue 11 migration and Issue 16 manual correspondence remain separate follow-ups.

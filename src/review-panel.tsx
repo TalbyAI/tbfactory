@@ -120,8 +120,9 @@ export function ReviewPanel({
         const run = view.runs.find((r: any) => r.id === report.run);
         const decision = view.decisions.find((d: any) => d.id === run?.decision);
         const current = view.reportStatus.find((s: any) => s.report === report.id)?.current;
+        const publication = view.publications.find((p: any) => p.id === run?.publication);
         const canReview =
-          !run?.publication &&
+          (!run?.publication || publication?.correctionAllowed) &&
           current &&
           (['waiting-review', 'waiting-revalidation'].includes(run?.status) ||
             (!active && run?.status === 'completed'));
@@ -177,10 +178,13 @@ export function ReviewPanel({
               decision?.usable &&
               run?.status === 'completed' &&
               !active &&
-              !run.publication && (
+              (!run.publication ||
+                (publication?.correctionAllowed && publication.decision !== decision.id)) && (
                 <button
                   disabled={busy}
-                  onClick={() => void write('review-publications', { run: run.id })}
+                  onClick={() =>
+                    void write('review-publications', { run: run.id, decision: decision.id })
+                  }
                 >
                   Request publication of confirmed Findings
                 </button>
@@ -265,6 +269,20 @@ function PublicationPanel({
   const [resolution, setResolution] = useState('completed');
   const [confirmedStopped, setConfirmedStopped] = useState(false);
   const recoverable = ['uncertain', 'failed', 'blocked'].includes(p.status);
+  const canComplete = !!evidence?.matches.length;
+  const canRetry = !!evidence?.complete && !evidence.unavailable && !canComplete;
+  const canStop = canRetry || (!!evidence?.noDispatch && !canComplete);
+  const allowed =
+    resolution === 'completed'
+      ? canComplete
+      : resolution === 'retry'
+        ? canRetry
+        : resolution === 'not-published' && canStop;
+  useEffect(() => {
+    setResolution(canComplete ? 'completed' : canStop ? 'not-published' : '');
+    setReason('');
+    setConfirmedStopped(false);
+  }, [p.evidence, canComplete, canStop]);
   return (
     <section aria-label="Publication and recovery">
       <h5>
@@ -275,15 +293,26 @@ function PublicationPanel({
       </p>
       {p.error && <p role="status">{p.error}</p>}
       {p.effect && <p>Completed provider comment: {p.effect.id}</p>}
+      {p.effects?.length > 1 && (
+        <p role="status">
+          Possible duplicate publication. Matching provider comments:{' '}
+          {p.effects.map((effect: any) => effect.id).join(', ')}. Another attempt is prohibited.
+        </p>
+      )}
       {p.status === 'waiting-approval' && (
-        <button disabled={busy} onClick={() => void write('publication-approval', { run: p.run })}>
+        <button
+          disabled={busy}
+          onClick={() => void write('publication-approval', { run: p.run, publication: p.id })}
+        >
           Approve this publication Activity
         </button>
       )}
       {recoverable && (
         <button
           disabled={busy}
-          onClick={() => void write('publication-reconciliation', { run: p.run })}
+          onClick={() =>
+            void write('publication-reconciliation', { run: p.run, publication: p.id })
+          }
         >
           Gather provider evidence
         </button>
@@ -296,14 +325,34 @@ function PublicationPanel({
           {recoverable ? 'User confirmation is required.' : 'Recovery decision recorded.'}
         </p>
       )}
-      {recoverable && evidence && (
+      {recoverable && evidence && !canComplete && !canStop && (
+        <p role="status">
+          Evidence is insufficient to resolve publication or authorize another attempt. Gather
+          provider evidence again; the outcome remains unresolved.
+        </p>
+      )}
+      {recoverable && evidence && canComplete && evidence.matches.length > 1 && (
+        <p role="status">
+          Possible duplicate publication. Matching provider comments:{' '}
+          {evidence.matches.map((effect: any) => effect.id).join(', ')}. Another attempt is
+          prohibited.
+        </p>
+      )}
+      {recoverable && evidence?.noDispatch && !canComplete && (
+        <p>
+          The Factory never authorized a provider POST for this attempt. You may confirm the stopped
+          Activity as not published.
+        </p>
+      )}
+      {recoverable && evidence && (canComplete || canStop) && (
         <form
           aria-label="Confirm publication recovery"
           onSubmit={(event) => {
             event.preventDefault();
-            if (!reason.trim() || !confirmedStopped) return;
+            if (!reason.trim() || !confirmedStopped || !allowed) return;
             void write('publication-confirmation', {
               run: p.run,
+              publication: p.id,
               evidence: p.evidence,
               resolution,
               reason: reason.trim(),
@@ -315,13 +364,12 @@ function PublicationPanel({
             <label>
               Recovery decision
               <select value={resolution} onChange={(event) => setResolution(event.target.value)}>
-                <option value="completed">Confirm already published</option>
-                {!evidence.matches.length && (
-                  <option value="not-published">Confirm not published and stop</option>
-                )}
-                {!evidence.matches.length && (
-                  <option value="retry">Authorize a new publication attempt</option>
-                )}
+                <option value="" disabled>
+                  Choose a recovery decision
+                </option>
+                {canComplete && <option value="completed">Confirm already published</option>}
+                {canStop && <option value="not-published">Confirm not published and stop</option>}
+                {canRetry && <option value="retry">Authorize a new publication attempt</option>}
               </select>
             </label>
             <label>
@@ -342,7 +390,7 @@ function PublicationPanel({
               I verified the provider outcome and confirm the previous attempt has stopped. A new
               attempt may duplicate a publication if my conclusion is wrong.
             </label>
-            <button disabled={busy || !reason.trim() || !confirmedStopped}>
+            <button disabled={busy || !reason.trim() || !confirmedStopped || !allowed}>
               Record recovery decision
             </button>
           </fieldset>

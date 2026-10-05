@@ -6,10 +6,15 @@ import { type Caller } from './auth';
 import { type Factory, type Operation } from './factory';
 import { type Row, type Transaction } from './store';
 import { decisionUsable, executionCaller, scopeOf, type Run } from './reviews';
-import { publicationDestination } from './publication-provider';
+import { publicationDestination, type ProviderEffect } from './publication-provider';
 import { itemDefinition } from './work-item-types';
 
-export const publicationActionSchema = z.strictObject({ operationId: identifier, run: identifier });
+export const publicationActionSchema = z.strictObject({
+  operationId: identifier,
+  run: identifier,
+  publication: identifier.optional(),
+  decision: identifier.optional(),
+});
 export const publicationConfirmationSchema = publicationActionSchema.extend({
   evidence: identifier,
   resolution: z.enum(['completed', 'not-published', 'retry']),
@@ -44,13 +49,61 @@ export type Publication = Row & {
     approval?: { actor: string; binding: string };
     evidence?: string;
     effect?: { id: string; contentDigest: string };
+    effects?: ProviderEffect[];
+    dispatchAuthorized?: boolean;
     error?: string;
     recoveryActor?: string;
   };
 };
-export const publicationId = (run: string) => digest(`publication-v1:${run}`);
+export const publicationId = (run: string, decision?: string) =>
+  digest(decision ? stable(['publication-v2', run, decision]) : `publication-v1:${run}`);
+export async function publicationForRun(tx: Transaction, run: Run) {
+  const p = (await tx.get('external_activity', run.data.publication ?? publicationId(run.id))) as
+    | Publication
+    | undefined;
+  if (p && (p.run !== run.id || p.organization !== run.organization || p.workItem !== run.workItem))
+    fail(409, 'Publication run binding mismatch');
+  return p;
+}
+export async function publicationMatches(tx: Transaction, p: Publication) {
+  const facts = await tx.list(
+    'fact',
+    'organization = $organization AND workItem = $workItem AND kind = $kind',
+    {
+      organization: p.organization,
+      workItem: p.workItem,
+      kind: 'publication.evidence',
+    },
+  );
+  const matches = new Map<string, ProviderEffect>();
+  for (const fact of facts) {
+    const evidence = fact.payload as any;
+    if (evidence.activity !== p.id) continue;
+    for (const effect of evidence.matches) matches.set(effect.id, effect);
+  }
+  return [...matches.values()];
+}
+export async function publicationCanBeCorrected(tx: Transaction, p?: Publication) {
+  if (!p || p.data.status === 'skipped') return true;
+  if (p.data.status !== 'not-published' || !p.data.evidence) return false;
+  const fact = await tx.get('fact', p.data.evidence);
+  const evidence = fact?.payload as any;
+  return (
+    fact?.kind === 'publication.evidence' &&
+    evidence.activity === p.id &&
+    evidence.attempt === p.data.attempt &&
+    (evidence.complete === true ||
+      (evidence.noDispatch === true && p.data.dispatchAuthorized === false)) &&
+    !(await publicationMatches(tx, p)).length
+  );
+}
 export const publicationView = (row: Row) => {
-  const { content: _content, token: _token, ...data } = row.data as Publication['data'];
+  const {
+    content: _content,
+    token: _token,
+    dispatchAuthorized: _dispatchAuthorized,
+    ...data
+  } = row.data as Publication['data'];
   return { id: row.id, run: row.run, ...data };
 };
 export const publicationBinding = (p: Publication) =>
@@ -160,13 +213,19 @@ export async function publicationOperation(
   const run = (await tx.get('workflow_run', input.run)) as Run | undefined;
   if (!run || run.organization !== item.organization || run.workItem !== item.id)
     fail(404, 'Resource not found');
-  let p = (await tx.get('external_activity', publicationId(run.id))) as Publication | undefined;
+  let p = await publicationForRun(tx, run);
+  if (input.publication && input.publication !== p?.id)
+    fail(409, 'Current publication Activity required');
   if (operation.action === 'publication.request') {
     if (!itemDefinition(item).approvalPoints.some((point) => point.id === 'review.publish'))
       fail(409, 'Publication unavailable for retained Work Item Type');
     const permission = await authorization(tx, caller, 'review.publish', scope);
     return factory.mutate(tx, caller, operation, input, async () => {
-      if (p) return { publication: publicationView(p) };
+      if (input.decision && input.decision !== run.data.decision)
+        fail(409, 'Current Review Decision required');
+      if (p && p.data.decision === run.data.decision) return { publication: publicationView(p) };
+      if (p && !(await publicationCanBeCorrected(tx, p)))
+        fail(409, 'Previous publication prevents a new Activity');
       if (item.activeRun || run.data.status !== 'completed' || run.data.workflow !== 'review-v1')
         fail(409, 'Completed Review Workflow required');
       const decision = run.data.decision && (await tx.get('fact', run.data.decision));
@@ -178,7 +237,7 @@ export async function publicationOperation(
         fail(422, 'Confirmed publication exceeds provider content limit');
       const destination = await publicationDestination(tx, item);
       p = {
-        id: publicationId(run.id),
+        id: publicationId(run.id, p ? decision.id : undefined),
         organization: run.organization,
         workItem: run.workItem,
         run: run.id,
@@ -196,6 +255,7 @@ export async function publicationOperation(
           },
           attempt: 1,
           token: randomUUID(),
+          dispatchAuthorized: false,
         },
       };
       await tx.create('external_activity', p);
@@ -262,9 +322,19 @@ export async function publicationOperation(
       (evidence.payload as any).attempt !== p!.data.attempt
     )
       fail(409, 'Provider evidence mismatch');
-    const matches = (evidence.payload as any).matches;
+    const data = evidence.payload as any;
+    const matches = await publicationMatches(tx, p!);
     if (['retry', 'not-published'].includes(input.resolution) && matches.length)
       fail(409, 'Provider evidence shows publication; a new attempt is prohibited');
+    if (input.resolution === 'completed' && !matches.length)
+      fail(409, 'Identified provider effect required for completion');
+    const noDispatch = data.noDispatch === true && p!.data.dispatchAuthorized === false;
+    if (
+      ['retry', 'not-published'].includes(input.resolution) &&
+      (data.complete !== true || data.unavailable === true) &&
+      !(input.resolution === 'not-published' && noDispatch)
+    )
+      fail(409, 'Complete provider evidence required; publication remains unresolved');
     let updated: Publication;
     if (input.resolution === 'retry') {
       // A retry is a new, separately authorized attempt. Prior attempt Facts are immutable.
@@ -276,6 +346,7 @@ export async function publicationOperation(
           token: randomUUID(),
           evidence: undefined,
           approval: undefined,
+          dispatchAuthorized: false,
           identity: {
             kind: 'user' as const,
             user: caller.user,
@@ -292,15 +363,20 @@ export async function publicationOperation(
       await publicationReady(tx, retry);
       updated = await publicationState(tx, retry, 'queued', { error: undefined });
     } else {
-      const effect =
-        input.resolution === 'completed' && matches.length === 1 ? matches[0] : undefined;
-      updated = await publicationState(tx, p!, input.resolution, { effect, error: undefined });
+      const effects = input.resolution === 'completed' ? matches : undefined;
+      const effect = effects?.[0];
+      updated = await publicationState(tx, p!, input.resolution, {
+        effect,
+        effects,
+        error: undefined,
+      });
       if (input.resolution === 'completed')
         await factory.fact(tx, caller, item, 'publication.completed', {
           run: run.id,
           activity: p!.id,
           attempt: p!.data.attempt,
           effect: effect ?? null,
+          effects,
           userConfirmed: true,
         });
     }

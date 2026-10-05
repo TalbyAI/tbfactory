@@ -30,7 +30,17 @@ export async function publicationRuntime(provider: 'github' | 'azure-devops', em
     reads: string[] = [];
   const effectsPath = join(r.directory, 'publication-effects.json');
   await writeFile(effectsPath, '[]');
-  let behavior: 'success' | 'reject' | 'lost' | 'malformed' | 'evidence-error' | 'slow' = 'success';
+  let behavior:
+    | 'success'
+    | 'reject'
+    | 'lost'
+    | 'malformed'
+    | 'evidence-error'
+    | 'partial-evidence'
+    | 'empty-evidence'
+    | 'duplicate-evidence'
+    | 'incomplete-evidence'
+    | 'slow' = 'success';
   let release: (() => void) | undefined;
   let holdRepository = false,
     repositoryEntered = false;
@@ -65,7 +75,22 @@ export async function publicationRuntime(provider: 'github' | 'azure-devops', em
         );
         return;
       }
-      res.end(JSON.stringify(provider === 'github' ? recorded : { value: recorded }));
+      if (behavior === 'partial-evidence' && req.url?.includes('page=2')) {
+        res.writeHead(503);
+        res.end();
+        return;
+      }
+      if (behavior === 'partial-evidence' || behavior === 'incomplete-evidence')
+        res.setHeader('link', '</comments?page=2>; rel="next"');
+      const listed =
+        behavior === 'empty-evidence'
+          ? []
+          : behavior === 'duplicate-evidence'
+            ? [...recorded, { ...recorded[0], id: 999 }]
+            : behavior === 'incomplete-evidence'
+              ? Array.from({ length: 100 }, (_, i) => ({ id: i + 1000, body: 'Other comment' }))
+              : recorded;
+      res.end(JSON.stringify(provider === 'github' ? listed : { value: listed }));
       return;
     }
     const body = JSON.parse(Buffer.concat(chunks).toString());

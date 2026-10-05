@@ -152,11 +152,30 @@ The pilot's responsibilities are:
 2. Handle a Transition Request according to its type, permissions, prerequisites, and Workflow Run exclusivity.
 3. Execute the Review Workflow, producing a version-bound report Artifact and proposed Findings.
 4. Obtain the human Review Decision, including for empty reports; relevant input changes require renewed review.
-5. Publish only confirmed Findings through the configured, authorized publication path.
-6. Record the Review Workflow's completion without implicitly changing Factory state.
+5. Record the Review Workflow's completion without implicitly changing Factory state.
+6. On an explicit publication request, publish only confirmed Findings through the configured, independently authorized publication path.
 7. Handle Work Item lifecycle finalization separately through the Review Finalization Workflow and the type's permitted State Transitions.
 
 See [review/finalization separation](adr/0005-review-and-lifecycle-separation.md), [pilot scope](adr/0008-artifact-storage-and-pilot-scope.md), and [MVP human confirmation](adr/0009-human-finding-confirmation-for-mvp.md).
+
+The User approved the detailed
+[publication boundaries](../.scratch/factory-mvp/designs/confirmed-publication-and-reconciliation.md#user-approval--2026-10-05)
+on 2026-10-05. Publication requires Work Item Type version 4 and an explicit request
+after review completion; the same Workflow Run reacquires exclusive ownership for
+the Activity without replaying review or retained Mastra snapshots. Version-3 Work
+Items await explicit Issue 11 migration, which requires new review and human
+confirmation unless a separate compatibility contract is approved.
+
+A current Review Decision may be corrected after safe `skipped` or `not-published`
+completion, preserving the previous Activity and requiring a new explicitly
+requested, authorized Activity. Completed publication and unresolved execution
+remain protected. Recovery completion requires an identified provider effect;
+negative resolution and retry require complete evidence without positive matches,
+except that durable local proof of no authorized POST for the current attempt also
+permits confirmed nonpublication. Positive matches survive partial failures and
+later queries. Manual Work Items without provider correspondence cannot publish;
+explicit authorized binding is a deferred follow-up, and ingestion does not bind
+an existing manual Work Item.
 
 ## Planned Mastra–SurrealDB adapter prototype
 
