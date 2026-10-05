@@ -300,7 +300,10 @@ export async function publicationOperation(
   await authorized(tx, caller, 'review.recover', scope);
   return factory.mutate(tx, caller, operation, input, async () => {
     if ((item.activeRun as any)?.id !== run.id) fail(409, 'Publication ownership lost');
-    if (!['uncertain', 'failed', 'blocked'].includes(p!.data.status))
+    if (
+      !['uncertain', 'failed', 'blocked'].includes(p!.data.status) &&
+      !(operation.action === 'publication.reconcile' && p!.data.status === 'waiting-approval')
+    )
       fail(409, 'Publication execution is unresolved or recovery is already claimed');
     if (operation.action === 'publication.reconcile') {
       const updated = await publicationState(tx, p!, 'reconciliation-queued', {

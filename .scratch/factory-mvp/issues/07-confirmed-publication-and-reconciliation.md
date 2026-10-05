@@ -156,3 +156,49 @@ Browser evidence is in ignored
 `.runtime/review-d4b7ab5d-ead5-47ff-939a-afc174e0680f/publication-browser-checks.json`.
 Recorded local provider effects do not establish production exactly-once guarantees.
 Issue 11 migration and Issue 16 manual correspondence remain separate follow-ups.
+
+### Approved Approval-wait recovery correction — 2026-10-05
+
+The User approved resolving the P1 that stranded publication ownership when
+Approval was rejected after relevant inputs changed or the requesting API
+Credential was revoked. Publication reconciliation now accepts `waiting-approval`
+under the recovering browser User's current `review.recover`, Work Item and
+Artifact access. The UI offers the existing evidence-gathering action during that
+wait. Recovery may also abandon a valid wait without first rejecting Approval.
+
+The existing worker and confirmation path records durable evidence, retains
+ownership until confirmed resolution, and permits `not-published` with local proof
+of no authorized POST even when provider evidence is unavailable. Approval and
+recovery claims compete atomically. Confirmation cannot bypass reconciliation,
+stale evidence is rejected, and retained attempts without dispatch tracking do
+not infer local proof. Historical Facts, positive effects, current retry authority
+and input checks remain protected. Safe terminal recovery releases the Work Item
+for a new Review Workflow without changing Factory state.
+
+Verification:
+
+- The new input-change regression first failed because competing recovery claims
+  both returned 409 instead of allowing one authorized claim; it passes with the fix.
+- `npm test`: all 128 checks pass, including eight new provider-parameterized
+  Approval-wait recovery regressions. They cover stale inputs, revoked requester
+  credentials, denied and nonhuman recovery, competing claims and confirmations,
+  Approval races, stale commands/evidence, immutable history, process restart,
+  retained attempts without local tracking, zero POSTs and a new Review Workflow.
+- `npm run typecheck`, `npm run build` and `npm run format:check`: pass.
+- Built HTTP/OIDC publication acceptance passes with a revoked requester waiting
+  for Approval, unavailable provider evidence, evidence-backed nonpublication
+  without a POST, corrected decisions, preserved prior Activities, lost response
+  and web/database/worker restart. Local non-dispatch evidence remains unchanged
+  after restart.
+- Collaborative browser inspection verifies reconciliation during the wait,
+  removal of Approval after the recovery claim, local proof with unavailable
+  provider evidence, only the eligible `not-published` resolution, required reason
+  and stopped confirmation, released ownership and the immutable recovery reason.
+
+Final built acceptance evidence is in ignored
+`.runtime/review-90878d76-332a-43ee-8882-766c2bb63129/publication-acceptance.json`.
+Browser evidence is in ignored
+`.runtime/review-1fc38f4f-7a22-45cf-9f7b-110ddd73e0dc/approval-recovery-browser.json`.
+The P1 is resolved. Provider abstractions, general cancellation and migrations
+remain outside this correction. Recorded effects do not establish production
+exactly-once guarantees.

@@ -96,7 +96,7 @@ Work Item API endpoints, relative to
 | --- | --- |
 | `review-publications` | None; request one Activity for the retained report/decision. |
 | `publication-approval` | None; human Activity-bound Approval. |
-| `publication-reconciliation` | None; queue read-only provider evidence collection. |
+| `publication-reconciliation` | None; queue read-only provider evidence collection, including during publication Approval waits. |
 | `publication-confirmation` | Latest `evidence` Fact ID, `resolution`, explanatory `reason`, `confirmedStopped: true`. |
 
 For Approval and recovery, include `publication` with the current Activity ID to
@@ -128,6 +128,18 @@ or remove its database record. Gather provider evidence in the UI or API, then
 inspect the actual destination. Evidence matches exact content and an
 Activity/attempt marker. Listing failure or no matches does not prove absence.
 Neither GitHub nor Azure creation is treated as idempotent.
+
+A publication in `waiting-approval` also offers **Gather provider evidence**.
+Use this recovery path when relevant inputs changed, the requesting API Credential
+was revoked, or an authorized User chooses to abandon a valid Approval wait.
+An Approval rejection leaves ownership intact; recovery does not require the
+requester's credential or current `review.publish` authority. The recovering
+browser User still needs current `review.recover`, Work Item and Artifact access.
+Approval and reconciliation compete atomically, so only one can advance the wait.
+After reconciliation is claimed, Approval is unavailable. The worker records the
+evidence before confirmation; ownership stays held until an authorized User
+confirms the resolution. Durable local proof of no authorized POST permits
+`not-published` even if provider evidence or write credentials are unavailable.
 
 An authorized browser User with `review.recover` confirms the latest evidence and
 records a reason. Resolutions:
@@ -164,12 +176,15 @@ The replacement marks interrupted provider operations uncertain without replay.
 publication-owned Work Item. Restore SurrealDB, the key ring, worker files and
 private Artifacts consistently using the existing installation recovery procedure.
 
-Verification uses `tests/publications.test.ts` and `tests/publication-corrections.test.ts` with real review generation,
+Verification uses `tests/publications.test.ts`, `tests/publication-corrections.test.ts`
+and `tests/publication-approval-recovery.test.ts` with real review generation,
 SurrealDB, LibSQL, Docker, separate workers and recorded local provider effects.
-`npm run acceptance:publications` exercises the built application with OIDC, rejected
-insufficient recovery, evidence-backed nonpublication, correction, a new Activity,
+`npm run acceptance:publications` exercises the built application with OIDC, recovery
+from an Approval wait after requester credential revocation, rejected insufficient
+recovery, evidence-backed nonpublication, correction, a new Activity,
 lost response and web/database/worker restart while retaining both Activities.
-For browser inspection, run it with `-- --hold-insufficient --hold-correction --hold`;
+For browser inspection, run
+`node --import tsx tests/publication-acceptance.ts --hold-approval --hold-insufficient --hold-correction --hold`;
 each checkpoint prints its state and waits for a line on stdin before continuing
 or closing the final browser session.
 Production provider credentials and live customer pull requests are not test inputs.

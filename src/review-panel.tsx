@@ -307,7 +307,7 @@ function PublicationPanel({
           Approve this publication Activity
         </button>
       )}
-      {recoverable && (
+      {(recoverable || p.status === 'waiting-approval') && (
         <button
           disabled={busy}
           onClick={() =>

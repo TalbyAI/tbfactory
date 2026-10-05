@@ -88,6 +88,12 @@ uncertain only when a new worker has acquired the existing confirmed-stop
 installation lock. Neither leases nor timeouts prove that execution stopped.
 
 An authorized User requests read-only reconciliation using `review.recover`.
+This includes `waiting-approval`, even before an Approval rejection. Relevant-input
+changes or revocation of the requesting API Credential must not strand ownership.
+Recovery uses the recovering User's current access independently of the original
+Execution Identity. Approval and reconciliation claims serialize atomically;
+once reconciliation is claimed, the waiting Activity cannot be approved.
+Confirmation remains unavailable until reconciliation records the latest evidence.
 The worker queries the retained destination, collecting matching provider IDs and
 content digests using an Activity/attempt marker and exact content. GitHub listing
 uses bounded pagination; missing or incomplete evidence is never proof of absence.
@@ -130,3 +136,12 @@ permit corrections after safe terminal nonpublication with a new decision-bound
 Activity; require sufficient recovery evidence and preserve every positive match;
 retain provider correspondence while deferring explicit binding of manual Work Items.
 These are approved implementation decisions, distinct from the broader ADR invariants.
+
+### Approval-wait recovery correction
+
+The User approved recovery from any publication Approval wait through the existing
+reconciliation and confirmation path. This permits abandoning a valid wait as well
+as resolving stale inputs or revoked requester credentials. Existing evidence
+requirements, immutable history, current recovery authority, stopped-execution
+confirmation and exclusive ownership remain unchanged. No general
+Workflow cancellation, migration or provider abstraction is introduced.

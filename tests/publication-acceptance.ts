@@ -6,6 +6,7 @@ import { publicationRuntime } from './support/publication-runtime';
 import { selfHostedProvider, BrowserClient } from './support/provider';
 import { provision } from '../src/server/provision';
 import { activities } from '../src/server/contracts';
+import { setPolicy } from '../src/server/operator';
 
 const f = await publicationRuntime('github');
 const provider = await selfHostedProvider();
@@ -86,6 +87,108 @@ try {
   await startWeb();
   const browser = new BrowserClient();
   await browser.login(origin, 'alice');
+  await setPolicy(f.r.f.store, {
+    organization: 'alpha',
+    user: f.r.f.alice.user.id,
+    activity: 'review.publish',
+    scope: 'organization',
+    scopeId: 'alpha',
+    effect: 'human',
+  });
+  const credential = await f.r.f.request('/api/organizations/alpha/api-credentials', {
+    operationId: 'built-waiting-credential',
+    label: 'Waiting publication requester',
+    activities: ['work-item.read', 'artifact.read', 'review.publish'],
+    expiresAt: Date.now() + 600000,
+  });
+  assert.equal(credential.status, 200);
+  const waiting = await browser.json(
+    origin,
+    `${f.path}/review-publications`,
+    {
+      operationId: 'built-waiting-publication',
+      run: f.run.id,
+    },
+    credential.body.token,
+  );
+  assert.equal(waiting.status, 200);
+  assert.equal(waiting.body.publication.status, 'waiting-approval');
+  assert.equal(
+    (
+      await f.r.f.request(
+        `/api/organizations/alpha/api-credentials/${credential.body.credential.id}/revoke`,
+        { operationId: 'built-revoke-waiting-credential' },
+      )
+    ).status,
+    200,
+  );
+  assert.equal(
+    (
+      await browser.json(origin, `${f.path}/publication-approval`, {
+        operationId: 'built-invalidated-approval',
+        run: f.run.id,
+        publication: waiting.body.publication.id,
+      })
+    ).status,
+    403,
+  );
+  f.behavior('evidence-error');
+  await f.r.startWorker();
+  await browserCheckpoint('approval');
+  // The optional checkpoint also permits exercising the same recovery in the UI.
+  let stoppedWait = currentPublication(await f.view());
+  if (stoppedWait.status === 'waiting-approval') {
+    assert.equal(
+      (
+        await browser.json(origin, `${f.path}/publication-reconciliation`, {
+          operationId: 'built-waiting-reconciliation',
+          run: f.run.id,
+          publication: stoppedWait.id,
+        })
+      ).status,
+      200,
+    );
+    stoppedWait = currentPublication(await f.wait('uncertain'));
+  }
+  if (stoppedWait.status === 'uncertain') {
+    assert.equal(
+      (
+        await browser.json(origin, `${f.path}/publication-confirmation`, {
+          operationId: 'built-waiting-confirmation',
+          run: f.run.id,
+          publication: stoppedWait.id,
+          evidence: stoppedWait.evidence,
+          resolution: 'not-published',
+          reason: 'Verified no authorized POST after requester credential revocation',
+          confirmedStopped: true,
+        })
+      ).status,
+      200,
+    );
+  }
+  stoppedWait = currentPublication(await f.view());
+  assert.equal(stoppedWait.status, 'not-published');
+  const waitEvidence = (await f.view()).publicationHistory.find(
+    (row: any) => row.id === stoppedWait.evidence,
+  );
+  assert.equal(waitEvidence.payload.noDispatch, true);
+  assert.equal(waitEvidence.payload.unavailable, true);
+  assert.equal((await browser.json(origin, f.path)).body.activeRun, undefined);
+  assert.equal(f.posts.length, 0);
+  await f.r.stopWorker();
+  const renewed = await browser.json(origin, `${f.path}/review-decisions`, {
+    operationId: 'built-decision-after-wait',
+    run: f.run.id,
+    reportVersion: f.report.id,
+    replaces: f.decision.id,
+    reviewed: true,
+    findings: f.report.findings.map((finding: any, i: number) =>
+      i === 0
+        ? { finding: finding.id, decision: 'confirmed' }
+        : { finding: finding.id, decision: 'rejected', reason: 'PRIVATE REJECTION REASON' },
+    ),
+  });
+  assert.equal(renewed.status, 200);
   f.behavior('reject');
   assert.equal(
     (
@@ -158,7 +261,7 @@ try {
     operationId: 'built-corrected-decision',
     run: f.run.id,
     reportVersion: f.report.id,
-    replaces: f.decision.id,
+    replaces: renewed.body.fact.id,
     reviewed: true,
     findings: f.report.findings.map((finding: any) => ({
       finding: finding.id,
@@ -203,7 +306,19 @@ try {
   assert.equal(restored.status, 200);
   assert.equal(currentPublication(restored.body).evidence, evidence);
   assert.equal(currentPublication(restored.body).status, 'uncertain');
-  assert.equal(restored.body.publications.length, 2);
+  assert.equal(restored.body.publications.length, 3);
+  assert.equal(
+    restored.body.publications.find((row: any) => row.id === stoppedWait.id).status,
+    'not-published',
+  );
+  assert.equal(
+    restored.body.publications.find((row: any) => row.id === stoppedWait.id).evidence,
+    stoppedWait.evidence,
+  );
+  assert.deepEqual(
+    restored.body.publicationHistory.find((row: any) => row.id === waitEvidence.id),
+    waitEvidence,
+  );
   assert.equal(
     restored.body.publications.find((row: any) => row.id === absent.id).status,
     'not-published',
@@ -262,6 +377,7 @@ try {
         {
           passed: true,
           checks: [
+            'Approval wait with revoked requester recovered without a POST',
             'built HTTP rejects insufficient completion, retry and nonpublication',
             'evidence-backed nonpublication and explicit corrected decision',
             'new decision-bound Activity preserves prior publication history',
