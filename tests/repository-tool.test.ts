@@ -52,7 +52,7 @@ test('Repository tools serialize large and escaped Git output within sandbox ret
     );
     assert.ok(Buffer.byteLength(stdout) < 32768, `${operation} must fit retention`);
     const response = JSON.parse(stdout);
-    if (operation === 'files' || operation === 'diff') {
+    if (operation === 'files' || operation === 'diff' || operation === 'read') {
       assert.equal(response.truncated, true);
       assert.ok(response.output.length > 0);
     } else if (operation === 'location') {
