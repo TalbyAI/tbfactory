@@ -50,7 +50,7 @@ export function ReviewPanel({
     (r: any) => !['completed', 'superseded', 'stopped'].includes(r.status),
   );
   return (
-    <section aria-label={`Private review ${item.title}`}>
+    <section className="review-panel" aria-label={`Private review ${item.title}`}>
       <h4>Private Review Reports</h4>
       {error && <p role="alert">{error}</p>}
       <button type="button" className="secondary" disabled={busy} onClick={() => void refresh()}>
@@ -93,55 +93,238 @@ export function ReviewPanel({
         </form>
       )}
       {active?.status === 'waiting-approval' && (
-        <button disabled={busy} onClick={() => void write('review-approval', { run: active.id })}>
-          Approve report generation
-        </button>
-      )}
-      {view.reports.map((report: any) => (
-        <details key={report.id} open={report.id === active?.report}>
-          <summary>Private report · {report.id.slice(0, 12)}</summary>
-          <p>Summary: {report.summary}</p>
-          <p>Human Review Decision: pending. Findings are proposed.</p>
-          <p>
-            Source: {report.relevantInputs.checkout.sourceCommit} · Target:{' '}
-            {report.relevantInputs.checkout.targetCommit}
-          </p>
-          {(view.currentInputs.sourceCommit !== report.relevantInputs.checkout.sourceCommit ||
-            view.currentInputs.targetCommit !== report.relevantInputs.checkout.targetCommit) && (
+        <div>
+          {view.runStatus.find((s: any) => s.run === active.id)?.current === false && (
             <p role="status">
-              Source or target commits have changed. This report retains its original inputs.
+              Relevant input versions have changed. Supersede this review before requesting renewed
+              Approval.
             </p>
           )}
-          {report.findings.map((finding: any) => (
-            <div key={finding.id}>
-              <h5>
-                {finding.title} · {finding.severity}
-              </h5>
-              <p>{finding.explanation}</p>
-              {finding.location && (
-                <p>
-                  {finding.location.path}:{finding.location.line}
-                </p>
+          <button
+            disabled={
+              busy || view.runStatus.find((s: any) => s.run === active.id)?.current === false
+            }
+            onClick={() => void write('review-approval', { run: active.id })}
+          >
+            Approve report generation
+          </button>
+          <button
+            disabled={busy}
+            onClick={() => void write('review-supersession', { run: active.id })}
+          >
+            Supersede this review
+          </button>
+        </div>
+      )}
+      {view.reports.map((report: any) => {
+        const run = view.runs.find((r: any) => r.id === report.run);
+        const decision = view.decisions.find((d: any) => d.id === run?.decision);
+        const current = view.reportStatus.find((s: any) => s.report === report.id)?.current;
+        const canReview =
+          current &&
+          (['waiting-review', 'waiting-revalidation'].includes(run?.status) ||
+            (!active && run?.status === 'completed'));
+        return (
+          <details key={report.id} open={report.id === active?.report}>
+            <summary>Private report · {report.id.slice(0, 12)}</summary>
+            <p>Summary: {report.summary}</p>
+            <p>
+              Human Review Decision:{' '}
+              {decision
+                ? decision.usable
+                  ? 'submitted and current'
+                  : 'requires renewed review'
+                : 'pending. Findings are proposed.'}
+            </p>
+            <p>
+              Source: {report.relevantInputs.checkout.sourceCommit} · Target:{' '}
+              {report.relevantInputs.checkout.targetCommit}
+            </p>
+            {!current && (
+              <p role="status">
+                Relevant input versions have changed. This report retains its original inputs.
+                Request a new review and confirm its Findings again.
+              </p>
+            )}
+            {report.findings.map((finding: any) => (
+              <div key={finding.id}>
+                <h5>
+                  {finding.title} · {finding.severity}
+                </h5>
+                <p>{finding.explanation}</p>
+                {finding.location && (
+                  <p>
+                    {finding.location.path}:{finding.location.line}
+                  </p>
+                )}
+                {finding.previousFinding && (
+                  <p>
+                    Previous Finding: {finding.previousFinding} · {finding.assessment}
+                  </p>
+                )}
+              </div>
+            ))}
+            {!report.findings.length && (
+              <p>
+                {decision?.usable
+                  ? 'No Findings. Human review recorded.'
+                  : 'No Findings. Human review is still required.'}
+              </p>
+            )}
+            <a href={`${path}/reviews/${report.id}/artifact`}>Download private Markdown report</a>
+            {view.decisions
+              .filter((d: any) => d.payload.reportVersion === report.id)
+              .map((d: any) => (
+                <details key={d.id} open={d.id === decision?.id}>
+                  <summary>
+                    Review Decision · {d.id.slice(0, 12)} · {d.usable ? 'current' : 'superseded'} ·
+                    User {d.actor}
+                  </summary>
+                  {d.payload.findings.map((f: any) => (
+                    <p key={f.finding}>
+                      {report.findings.find((finding: any) => finding.id === f.finding)?.title}:{' '}
+                      {f.decision}
+                      {f.reason && ` — ${f.reason}`}
+                    </p>
+                  ))}
+                  {!d.payload.findings.length && <p>Empty report explicitly reviewed.</p>}
+                </details>
+              ))}
+            {canReview && (
+              <ReviewDecisionForm
+                key={`${report.id}:${decision?.id ?? 'pending'}`}
+                report={report}
+                decision={decision}
+                busy={busy}
+                submit={(findings) =>
+                  write('review-decisions', {
+                    run: report.run,
+                    reportVersion: report.version,
+                    reviewed: true,
+                    findings,
+                    ...(decision ? { replaces: decision.id } : {}),
+                  })
+                }
+              />
+            )}
+            {active?.report === report.id &&
+              ['waiting-review', 'waiting-revalidation', 'waiting-authorization'].includes(
+                active.status,
+              ) && (
+                <button
+                  disabled={busy}
+                  onClick={() => void write('review-supersession', { run: active.id })}
+                >
+                  Supersede this review
+                </button>
               )}
-              {finding.previousFinding && (
-                <p>
-                  Previous Finding: {finding.previousFinding} · {finding.assessment}
-                </p>
-              )}
-            </div>
-          ))}
-          {!report.findings.length && <p>No Findings. Human review is still required.</p>}
-          <a href={`${path}/reviews/${report.id}/artifact`}>Download private Markdown report</a>
-          {active?.report === report.id && active.status === 'waiting-review' && (
-            <button
-              disabled={busy}
-              onClick={() => void write('review-supersession', { run: active.id })}
-            >
-              Supersede this review
-            </button>
-          )}
-        </details>
-      ))}
+          </details>
+        );
+      })}
     </section>
+  );
+}
+
+function ReviewDecisionForm({
+  report,
+  decision,
+  busy,
+  submit,
+}: {
+  report: any;
+  decision: any;
+  busy: boolean;
+  submit: (findings: any[]) => Promise<void>;
+}) {
+  const [choices, setChoices] = useState<Record<string, { decision: string; reason: string }>>(() =>
+    Object.fromEntries(
+      (decision?.payload.findings ?? []).map((f: any) => [
+        f.finding,
+        { decision: f.decision, reason: f.reason ?? '' },
+      ]),
+    ),
+  );
+  const [reviewed, setReviewed] = useState(false);
+  const complete =
+    reviewed &&
+    report.findings.every(
+      (f: any) =>
+        choices[f.id]?.decision === 'confirmed' ||
+        (choices[f.id]?.decision === 'rejected' && choices[f.id].reason.trim()),
+    );
+  return (
+    <form
+      className="review-decision"
+      aria-label="Consolidated Review Decision"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!complete) return;
+        void submit(
+          report.findings.map((f: any) => ({
+            finding: f.id,
+            decision: choices[f.id].decision,
+            ...(choices[f.id].decision === 'rejected'
+              ? { reason: choices[f.id].reason.trim() }
+              : {}),
+          })),
+        );
+      }}
+    >
+      <fieldset disabled={busy}>
+        <legend>
+          {decision ? 'Correct or renew the Review Decision' : 'Review all Findings together'}
+        </legend>
+        {report.findings.map((f: any) => (
+          <div key={f.id}>
+            <label>
+              Decision for {f.title}
+              <select
+                value={choices[f.id]?.decision ?? ''}
+                required
+                onChange={(event) =>
+                  setChoices({
+                    ...choices,
+                    [f.id]: { decision: event.target.value, reason: choices[f.id]?.reason ?? '' },
+                  })
+                }
+              >
+                <option value="">Choose a decision</option>
+                <option value="confirmed">Confirm</option>
+                <option value="rejected">Reject</option>
+              </select>
+            </label>
+            {choices[f.id]?.decision === 'rejected' && (
+              <label>
+                Rejection reason for {f.title}
+                <textarea
+                  required
+                  maxLength={10000}
+                  value={choices[f.id].reason}
+                  onChange={(event) =>
+                    setChoices({
+                      ...choices,
+                      [f.id]: { ...choices[f.id], reason: event.target.value },
+                    })
+                  }
+                />
+              </label>
+            )}
+          </div>
+        ))}
+        <label className="review-confirmation">
+          <input
+            type="checkbox"
+            checked={reviewed}
+            onChange={(event) => setReviewed(event.target.checked)}
+          />{' '}
+          I reviewed this report version and all its Findings, including an empty report.
+        </label>
+        <p>
+          This Review Decision records human validation. Publication requires separate
+          authorization.
+        </p>
+        <button disabled={!complete || busy}>Submit consolidated Review Decision</button>
+      </fieldset>
+    </form>
   );
 }

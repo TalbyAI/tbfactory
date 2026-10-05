@@ -143,3 +143,19 @@ summary {
   cursor: pointer;
   font-weight: 600;
 }
+.review-panel {
+  overflow-wrap: anywhere;
+}
+.review-decision fieldset {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+.review-confirmation {
+  display: flex;
+  align-items: flex-start;
+}
+.review-confirmation input {
+  width: auto;
+  flex: none;
+}

@@ -18,12 +18,13 @@ import { limitsSchema, serviceUser } from './review-configuration';
 import {
   acceptIntake,
   executionCaller,
-  approvalBinding,
+  generationApproved,
   scopeOf,
   refreshNotification,
   relevantFacts,
   type Run,
   reportView,
+  decisionUsable,
 } from './reviews';
 import { transitionOperation } from './transitions';
 
@@ -116,6 +117,11 @@ export class ReviewWorker {
           tx.get('workflow_run', inputData.run),
         )) as Run;
         if (!run.data.report) fail(503, 'Completed report required');
+        if (run.data.decision) {
+          const accepted = await this.completeReview(run.id);
+          if (accepted) return inputData;
+          return suspend({ report: run.data.report });
+        }
         await this.update(run.id, 'waiting-review');
         return suspend({ report: run.data.report });
       },
@@ -134,6 +140,81 @@ export class ReviewWorker {
         .then(human)
         .commit(),
     };
+  }
+  private async completeReview(id: string) {
+    return this.store.transaction(async (tx) => {
+      const run = (await tx.get('workflow_run', id)) as Run;
+      const item = (await tx.get('work_item', run.workItem))!;
+      if ((item.activeRun as any)?.id !== run.id) fail(409, 'Review ownership lost');
+      const decision = run.data.decision && (await tx.get('fact', run.data.decision));
+      if (!decision || !(await decisionUsable(tx, item, run, decision))) {
+        const status = 'waiting-revalidation';
+        await tx.put('workflow_run', {
+          ...run,
+          data: {
+            ...run.data,
+            status,
+            error: 'Relevant inputs changed; renewed human review required',
+          },
+        });
+        await tx.put('work_item', {
+          ...item,
+          activeRun: { id, workflow: run.data.workflow, status },
+        });
+        return false;
+      }
+      let caller;
+      try {
+        caller = await executionCaller(tx, run);
+        const transition = await authorization(
+          tx,
+          caller,
+          'transition.request-review',
+          scopeOf(item),
+        );
+        const generation = await authorization(tx, caller, 'review.generate', scopeOf(item));
+        if (
+          (transition.requiresHuman && !run.data.requestApproval) ||
+          (generation.requiresHuman && !generationApproved(run))
+        )
+          fail(403, 'Activity-bound Approval required; supersede and request renewed Approval');
+      } catch (error: any) {
+        if (![403, 404].includes(error.status)) throw error;
+        const status = 'waiting-authorization';
+        await tx.put('workflow_run', {
+          ...run,
+          data: { ...run.data, status, error: error.message },
+        });
+        await tx.put('work_item', {
+          ...item,
+          activeRun: { id, workflow: run.data.workflow, status },
+        });
+        return false;
+      }
+      await tx.put('workflow_run', {
+        ...run,
+        data: { ...run.data, status: 'completed', error: undefined },
+      });
+      await tx.put('work_item', { ...item, activeRun: undefined });
+      const factId = digest(`review-completed:${id}`);
+      if (!(await tx.get('fact', factId)))
+        await tx.create('fact', {
+          id: factId,
+          organization: run.organization,
+          workItem: run.workItem,
+          actor: caller.user,
+          kind: 'workflow.completed',
+          recordedAt: Date.now(),
+          payload: {
+            run: id,
+            workflow: run.data.workflow,
+            report: run.data.report,
+            decision: decision.id,
+            publication: false,
+          },
+        });
+      return true;
+    });
   }
   private async intakeMissing(tx: Transaction, run: Run) {
     const item = (await tx.get('work_item', run.workItem))!;
@@ -204,8 +285,16 @@ export class ReviewWorker {
           );
           continue;
         }
-        if (['waiting-inputs', 'waiting-review'].includes(run.data.status)) {
-          if (run.data.status === 'waiting-review') {
+        if (
+          [
+            'waiting-inputs',
+            'waiting-review',
+            'review-submitted',
+            'waiting-revalidation',
+            'waiting-authorization',
+          ].includes(run.data.status)
+        ) {
+          if (run.data.report) {
             try {
               const report = await this.store.transaction((tx) =>
                 tx.get('review_report', run.data.report!),
@@ -258,6 +347,7 @@ export class ReviewWorker {
       if (((await tx.get('worker_owner', 'review'))?.data as any)?.owner !== this.owner)
         fail(409, 'Worker ownership lost');
       const run = (await tx.get('workflow_run', id)) as Run;
+      if (['completed', 'superseded', 'stopped'].includes(run.data.status)) return run;
       const data = { ...run.data, status, ...(error ? { error } : {}) };
       const updated = { ...run, data };
       await tx.put('workflow_run', updated);
@@ -690,7 +780,13 @@ export class ReviewWorker {
       if (this.running.size >= this.settings.concurrency) break;
       if (
         this.running.has(run.id) ||
-        !['queued', 'waiting-inputs', 'waiting-prerequisites'].includes(run.data.status)
+        ![
+          'queued',
+          'waiting-inputs',
+          'waiting-prerequisites',
+          'review-submitted',
+          'waiting-authorization',
+        ].includes(run.data.status)
       )
         continue;
       if (run.data.status === 'waiting-inputs') {
@@ -715,12 +811,40 @@ export class ReviewWorker {
         });
         if (missing.length) continue;
       }
+      if (run.data.status === 'waiting-authorization') {
+        const ready = await this.store.transaction(async (tx) => {
+          const item = await tx.get('work_item', run.workItem);
+          if (!item) return false;
+          try {
+            const caller = await executionCaller(tx, run);
+            const transition = await authorization(
+              tx,
+              caller,
+              'transition.request-review',
+              scopeOf(item),
+            );
+            const generation = await authorization(tx, caller, 'review.generate', scopeOf(item));
+            return !(
+              (transition.requiresHuman && !run.data.requestApproval) ||
+              (generation.requiresHuman && !generationApproved(run))
+            );
+          } catch (error: any) {
+            if ([403, 404].includes(error.status)) return false;
+            throw error;
+          }
+        });
+        if (!ready) continue;
+      }
       const task = this.execute(run)
         .catch(async (error) => {
           const current = (await this.store.transaction((tx) =>
             tx.get('workflow_run', run.id),
           )) as Run;
-          if (!['stopped', 'recovery-required'].includes(current.data.status))
+          if (
+            !['completed', 'superseded', 'stopped', 'recovery-required'].includes(
+              current.data.status,
+            )
+          )
             await this.update(run.id, 'waiting-prerequisites', (error as Error).message);
         })
         .finally(() => this.running.delete(run.id));
@@ -742,6 +866,14 @@ export class ReviewWorker {
       });
       if (result.status === 'failed')
         throw Error('Intake handoff failed; prerequisites require recheck');
+    } else if (
+      snapshot?.status === 'suspended' &&
+      run.data.workflow === 'review-v1' &&
+      run.data.decision
+    ) {
+      const result = await runtime.resume({ step: 'human-review', resumeData: { reviewed: true } });
+      if (result.status === 'failed')
+        throw Error('Review continuation requires authorization recheck');
     } else {
       const result = await runtime.start({ inputData: { run: run.id } });
       if (result.status === 'failed') throw Error('Workflow failed; inspect execution evidence');

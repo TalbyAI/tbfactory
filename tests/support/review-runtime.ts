@@ -41,7 +41,8 @@ export async function reviewRuntime() {
   git(['clone', '--bare', source, join(directory, 'repository.git')]);
   git(['update-server-info'], join(directory, 'repository.git'));
   const requests: any[] = [];
-  let behavior: 'report' | 'tools' | 'delay' | 'disconnect' | 'delegate' | 'empty' = 'tools';
+  let behavior: 'report' | 'tools' | 'delay' | 'disconnect' | 'delegate' | 'empty' | 'mixed' =
+    'tools';
   let delay = 0;
   const server = createServer(async (req, res) => {
     if (req.url?.startsWith('/repository.git/')) {
@@ -131,6 +132,16 @@ export async function reviewRuntime() {
                     location: { path: 'unchanged.ts', line: 1 },
                     ...(previous ? { previousFinding: previous.id, assessment: 'enriched' } : {}),
                   },
+                  ...(behavior === 'mixed'
+                    ? [
+                        {
+                          title: 'Review changed value',
+                          severity: 'low',
+                          explanation: 'The changed value needs human assessment.',
+                          location: { path: 'changed.ts', line: 1 },
+                        },
+                      ]
+                    : []),
                 ],
         });
     if (!body.stream) {

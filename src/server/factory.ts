@@ -17,7 +17,12 @@ import {
   invitationPreview,
 } from './invitations';
 import { definition, selection, selectionSchema } from './work-item-types';
-import { reviewOperation, reviewFactsSchema, reviewActionSchema } from './reviews';
+import {
+  reviewOperation,
+  reviewFactsSchema,
+  reviewActionSchema,
+  reviewDecisionSchema,
+} from './reviews';
 import {
   boardItem,
   transitionOperation,
@@ -87,6 +92,7 @@ const inputSchemas: Record<string, z.ZodType> = {
   'review.facts': reviewFactsSchema,
   'review.approve': reviewActionSchema,
   'review.supersede': reviewActionSchema,
+  'review.decide': reviewDecisionSchema,
   'type.manage': selectionSchema,
   'team.manage': teamSchema,
   'policy.manage': managedPolicySchema,
