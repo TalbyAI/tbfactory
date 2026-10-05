@@ -18,7 +18,7 @@ import { limitsSchema, serviceUser } from './review-configuration';
 import {
   acceptIntake,
   executionCaller,
-  approvalBinding,
+  generationApproved,
   scopeOf,
   refreshNotification,
   relevantFacts,
@@ -175,7 +175,7 @@ export class ReviewWorker {
         const generation = await authorization(tx, caller, 'review.generate', scopeOf(item));
         if (
           (transition.requiresHuman && !run.data.requestApproval) ||
-          (generation.requiresHuman && run.data.approval?.binding !== approvalBinding(run))
+          (generation.requiresHuman && !generationApproved(run))
         )
           fail(403, 'Activity-bound Approval required; supersede and request renewed Approval');
       } catch (error: any) {

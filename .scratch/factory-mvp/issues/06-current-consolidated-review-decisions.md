@@ -86,3 +86,21 @@ Contracts and revalidation procedures are documented in
 [durable private reviews](../../../docs/operations/durable-private-reviews.md#consolidated-human-decisions-and-revalidation).
 Publication and Review Finalization Workflow implementation remain subsequent
 issues. This issue is closed.
+
+### Review correction — 2026-10-05
+
+Corrected the P2 deployment regression caused by changing the generation Approval
+digest while retaining `review-v1`. Unversioned Approvals keep the original digest
+formula; new Approvals record `bindingVersion: 2` in both the run and the immutable
+Approval Fact. Agent dispatch and worker completion use the same version-aware
+validation. Existing Facts are preserved, unknown versions fail closed, and
+version 2 cannot fall back to a version 1 digest.
+
+Verification: `node --import tsx --test tests/review-approvals.test.ts` passes eight
+in-memory checks. The regression failed before the fix with `Generation Approval
+required` and blocked worker completion. Coverage includes new Approval issuance,
+both retained formulas, unchanged original Facts, changed inputs/configuration/
+Execution Identity, revoked authority/access, unknown versions and scope changes.
+`npm run typecheck` and `npm run format:check` pass. Integration tests were not
+rerun because the dedicated SurrealDB test service is not running; these checks
+do not use a database, Docker sandbox or persistent volume.

@@ -195,7 +195,15 @@ changed review fields and textual correction Facts do not invalidate a decision.
 Retained AI configuration changes still apply to new runs as described above.
 
 Generation Approval records its Activity, run, Execution Identity and relevant
-input versions. Relevant changes invalidate its use before Approval or dispatch;
+input versions. New Approvals retain `bindingVersion: 2` in both the run and the
+Approval Fact, binding the Activity, Organization and Work Item explicitly.
+Approvals without a binding version use the original version 1 digest over the
+run, Execution Identity, inputs and retained configuration. Both agent dispatch
+and review completion validate the retained version after deployment without
+rewriting the original Approval Fact. Unknown versions fail closed; version 2
+never falls back to version 1.
+
+Relevant input changes invalidate Approval use before Approval or dispatch;
 model/tool dispatch also rechecks versions and current execution authorization.
 Supersede the stopped `waiting-approval` run and request a replacement through the
 existing Transition Request path. The board exposes both operations.

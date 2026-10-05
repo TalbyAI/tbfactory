@@ -46,7 +46,7 @@ export type RunData = {
   createdAt: number;
   inputs?: Record<string, any>;
   config?: Record<string, any>;
-  approval?: { actor: string; binding: string };
+  approval?: { actor: string; binding: string; bindingVersion?: 1 | 2 };
   requestApproval?: unknown;
   report?: string;
   decision?: string;
@@ -206,18 +206,26 @@ export async function executionCaller(tx: Transaction, run: Run): Promise<Caller
   }
   return caller;
 }
-export const approvalBinding = (run: Run) =>
+export const approvalBinding = (run: Run, version: 1 | 2 = 2) =>
   digest(
     stable({
-      activity: 'review.generate',
-      organization: run.organization,
-      workItem: run.workItem,
+      ...(version === 2
+        ? { activity: 'review.generate', organization: run.organization, workItem: run.workItem }
+        : {}),
       run: run.id,
       identity: run.data.identity,
       inputs: run.data.inputs,
       config: run.data.config,
     }),
   );
+
+export function generationApproved(run: Run) {
+  const approval = run.data.approval;
+  if (!approval) return false;
+  // Approvals persisted before binding versioning retain the original review-v1 formula.
+  const version = approval.bindingVersion ?? 1;
+  return (version === 1 || version === 2) && approval.binding === approvalBinding(run, version);
+}
 
 // Only the Workflow's declared inputs participate; unrelated Facts are admissible.
 export async function reviewInputsCurrent(tx: Transaction, item: Row, inputs: Record<string, any>) {
@@ -437,7 +445,11 @@ export async function reviewOperation(
       if (run.data.status !== 'waiting-approval') fail(409, 'Run is not awaiting Approval');
       if (!(await reviewInputsCurrent(tx, item, run.data.inputs!)))
         fail(409, 'Relevant inputs changed; supersede this review and request a new report');
-      const approval = { actor: caller.user, binding: approvalBinding(run) };
+      const approval = {
+        actor: caller.user,
+        binding: approvalBinding(run),
+        bindingVersion: 2 as const,
+      };
       await factory.fact(tx, caller, item, 'activity.approved', {
         run: run.id,
         activity: 'review.generate',

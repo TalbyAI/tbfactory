@@ -8,7 +8,7 @@ import { digest, fail, stable } from './contracts';
 import { authorization } from './authorization';
 import {
   executionCaller,
-  approvalBinding,
+  generationApproved,
   reviewInputsCurrent,
   scopeOf,
   type Run,
@@ -59,7 +59,7 @@ export class ReviewAgent {
     if (transition.requiresHuman && !run.data.requestApproval)
       fail(403, 'Transition Approval required');
     const generation = await authorization(tx, caller, 'review.generate', scopeOf(item));
-    if (generation.requiresHuman && run.data.approval?.binding !== approvalBinding(run))
+    if (generation.requiresHuman && !generationApproved(run))
       fail(403, 'Generation Approval required');
     const repository = await authorization(tx, caller, 'repository.read', scopeOf(item));
     if (repository.requiresHuman)
