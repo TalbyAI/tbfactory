@@ -27,6 +27,13 @@ export const activities = [
   'approval.request-review',
   'approval.finalize-review',
   'approval.reopen-review',
+  'review.facts',
+  'review.generate',
+  'review.supersede',
+  'approval.review-generate',
+  'workflow.read',
+  'artifact.read',
+  'repository.read',
 ] as const;
 export const activitySchema = z.enum(activities);
 export const identifier = z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/);

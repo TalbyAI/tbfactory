@@ -9,7 +9,7 @@ const guid = z.guid().transform((value) => value.toLowerCase());
 const positive = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 const commit = z
   .string()
-  .regex(/^[a-fA-F0-9]{40,64}$/)
+  .regex(/^(?:[a-fA-F0-9]{40}|[a-fA-F0-9]{64})$/)
   .transform((value) => value.toLowerCase());
 const externalSchema = z.discriminatedUnion('provider', [
   z.strictObject({
@@ -113,8 +113,17 @@ const githubPayload = z.object({
     title: text.max(300),
     state: z.enum(['open', 'closed']),
     merged: z.boolean(),
-    head: z.object({ sha: commit }),
-    base: z.object({ sha: commit, repo: githubRepository }),
+    draft: z.boolean().optional(),
+    head: z.object({
+      sha: commit,
+      ref: z.string().min(1).max(300).optional(),
+      repo: githubRepository.nullable().optional(),
+    }),
+    base: z.object({
+      sha: commit,
+      ref: z.string().min(1).max(300).optional(),
+      repo: githubRepository,
+    }),
   }),
 });
 const azurePayload = z.object({
@@ -131,6 +140,9 @@ const azurePayload = z.object({
     pullRequestId: positive,
     title: text.max(300),
     status: z.enum(['active', 'completed', 'abandoned']),
+    sourceRefName: z.string().min(1).max(300).optional(),
+    targetRefName: z.string().min(1).max(300).optional(),
+    isDraft: z.boolean().optional(),
     lastMergeSourceCommit: z.object({ commitId: commit }),
     lastMergeTargetCommit: z.object({ commitId: commit }),
   }),
@@ -146,6 +158,10 @@ type Observation = {
   base: string;
   locator: string;
   merged?: boolean;
+  sourceBranch?: string;
+  targetBranch?: string;
+  sourceUrl?: string;
+  draft?: boolean;
 };
 
 function normalize(source: Source, request: Request, raw: unknown): Observation {
@@ -173,6 +189,10 @@ function normalize(source: Source, request: Request, raw: unknown): Observation 
       merged: pr.merged,
       head: pr.head.sha,
       base: pr.base.sha,
+      sourceBranch: pr.head.ref,
+      targetBranch: pr.base.ref,
+      draft: pr.draft,
+      ...(pr.head.repo ? { sourceUrl: `https://github.com/${pr.head.repo.full_name}.git` } : {}),
       locator: `https://github.com/${payload.repository.full_name}/pull/${pr.number}`,
     };
   }
@@ -193,6 +213,9 @@ function normalize(source: Source, request: Request, raw: unknown): Observation 
     state: pr.status,
     head: pr.lastMergeSourceCommit.commitId,
     base: pr.lastMergeTargetCommit.commitId,
+    sourceBranch: pr.sourceRefName?.replace(/^refs\/heads\//, ''),
+    targetBranch: pr.targetRefName?.replace(/^refs\/heads\//, ''),
+    draft: pr.isDraft,
     locator: `https://dev.azure.com/${external.organization}/${external.project}/_git/${external.repository}/pullrequest/${pr.pullRequestId}`,
   };
 }

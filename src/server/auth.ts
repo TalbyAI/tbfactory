@@ -19,6 +19,7 @@ export type Caller = {
   activities?: string[];
   credential?: string;
   session?: string;
+  service?: boolean;
 };
 
 export class Authentication {

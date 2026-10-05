@@ -4,8 +4,10 @@ The first production increment provides authenticated, Organization-scoped Work 
 immutable Fact history, Invitations and self-owned API credentials. TanStack Start
 owns both UI server functions and public HTTP routes; both use the same transactional
 Factory operations. SurrealDB is the primary persistent database.
-Workflow execution belongs to subsequent tickets. Scoped Teams, State Transitions
-and provider-authenticated GitHub/Azure DevOps observation ingestion are available.
+Scoped Teams, State Transitions and provider-authenticated GitHub/Azure DevOps
+observation ingestion are available. A separate Mastra worker now runs durable
+Review Intake Workflows and repository reviews in an isolated Docker sandbox,
+retaining private reports and proposed Findings for human review.
 
 ## Runtime and commands
 
@@ -145,6 +147,8 @@ cannot activate Invitations or create/revoke credentials.
 
 Provider source installation, native webhook authentication, credential rotation and
 delivery recovery are described in [provider observations](docs/operations/provider-observations.md).
+Review resources, worker volumes, private reports and stopped-execution recovery
+are described in [durable private reviews](docs/operations/durable-private-reviews.md).
 
 Follow [key-ring backup and recovery](docs/operations/key-ring-backup.md) and the
 [manual operation runbook](docs/operations/authenticated-work-items.md). Setup is

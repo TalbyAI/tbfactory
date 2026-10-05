@@ -36,8 +36,11 @@ A developer-defined process through which agents and humans can work on a Work I
 **Workflow Run**:
 A particular execution of a Workflow associated with a Work Item.
 
+**Review Intake Workflow**:
+A Workflow initiated by pull request import or a manual review request that waits for required review Facts, notifies the User about missing fields, and emits a review-start eligibility Fact when its preconditions are satisfied.
+
 **Review Workflow**:
-A Workflow that reviews code and produces an Artifact containing findings. It is not responsible for closing a Work Item or changing its Factory state.
+A Workflow that explores repository code, including differences between branches and relevant unchanged files, and produces an Artifact containing Findings. It is not responsible for closing a Work Item or changing its Factory state.
 
 **Review Finalization Workflow**:
 A Workflow that can end a Work Item's review lifecycle and perform the corresponding Factory State Transition.
@@ -78,6 +81,10 @@ A grouping of work and Repositories belonging to one Organization.
 
 **Repository**:
 A source code repository associated with one Project.
+
+**Repository Access Credential**:
+An Organization-owned credential for reading provider-hosted Repositories, which multiple Repositories may reference within its provider and access scope.
+_Avoid_: API Credential, which authenticates a User to the Factory.
 
 **Team**:
 A group within an Organization that can operate across its Projects and Repositories.

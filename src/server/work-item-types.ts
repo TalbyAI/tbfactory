@@ -13,7 +13,7 @@ export type TransitionId = (typeof transitionIds)[number];
 export const selectionSchema = z.strictObject({
   operationId: identifier,
   type: z.literal('pull-request-review'),
-  version: z.union([z.literal(1), z.literal(2)]),
+  version: z.union([z.literal(1), z.literal(2), z.literal(3)]),
   enabled: z.boolean(),
 });
 export const transitionInputs = {
@@ -75,13 +75,25 @@ export const transitionDefinitions = flow.map((transition) => ({
   approvalPoint: `transition.${transition.id}`,
 }));
 export function definition(type: unknown, version: unknown) {
-  if (type !== 'pull-request-review' || (version !== 1 && version !== 2))
+  if (type !== 'pull-request-review' || ![1, 2, 3].includes(Number(version)))
     fail(409, 'Retained Work Item Type unavailable');
   return {
     type: 'pull-request-review',
     version,
     states: version === 1 ? ['registered'] : ['registered', 'ready-for-review', 'completed'],
-    transitions: version === 1 ? [] : transitionDefinitions,
+    transitions:
+      version === 1
+        ? []
+        : version === 2
+          ? transitionDefinitions
+          : [
+              ...transitionDefinitions,
+              {
+                ...transitionDefinitions.find((t) => t.id === 'request-review')!,
+                from: 'registered',
+                to: 'registered',
+              },
+            ],
     approvalPoints:
       version === 1
         ? []

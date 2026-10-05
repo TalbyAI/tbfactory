@@ -10,6 +10,7 @@ import {
 } from './config';
 import { OrganizationSecrets } from './secrets';
 import { fail } from './contracts';
+import { ReviewArtifacts } from './review-artifacts';
 
 let services:
   | Promise<{
@@ -18,6 +19,7 @@ let services:
       origin: string;
       secrets: OrganizationSecrets;
       allowLoopbackHttp: boolean;
+      artifacts?: ReviewArtifacts;
     }>
   | undefined;
 export async function getServices() {
@@ -33,6 +35,9 @@ export async function getServices() {
         origin: applicationOrigin(),
         secrets,
         allowLoopbackHttp: process.env.FACTORY_ALLOW_LOOPBACK_HTTP === 'true',
+        artifacts: process.env.FACTORY_ARTIFACT_DIRECTORY
+          ? new ReviewArtifacts(process.env.FACTORY_ARTIFACT_DIRECTORY)
+          : undefined,
       };
     } catch (error) {
       await store.close();

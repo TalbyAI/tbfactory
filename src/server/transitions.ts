@@ -7,6 +7,7 @@ import { itemDefinition, transitionIds, transitionInputs } from './work-item-typ
 import { type Caller } from './auth';
 import { type Factory, type Operation } from './factory';
 import { type Row, type Transaction } from './store';
+import { acceptIntake } from './reviews';
 
 export const transitionRequestSchema = z
   .strictObject({
@@ -37,7 +38,8 @@ export async function boardItem(tx: Transaction, caller: Caller, item: Row) {
   for (const transition of itemDefinition(item).transitions.filter((t) => t.from === item.state)) {
     let reason: string | null = item.activeRun
       ? 'Active Workflow Run'
-      : transition.handling === 'workflow'
+      : transition.handling === 'workflow' &&
+          !(item.version === 3 && transition.id === 'request-review')
         ? 'Workflow not installed'
         : null;
     let requiresApproval = false;
@@ -75,7 +77,9 @@ const approvalBinding = (request: Row) =>
   );
 
 async function validateRequest(tx: Transaction, item: Row, request: Row) {
-  const transition = itemDefinition(item).transitions.find((t) => t.id === request.transition);
+  const transition = itemDefinition(item).transitions.find(
+    (t) => t.id === request.transition && t.from === item.state,
+  );
   if (
     !transition ||
     transition.from !== item.state ||
@@ -85,7 +89,11 @@ async function validateRequest(tx: Transaction, item: Row, request: Row) {
   )
     fail(409, 'Transition Request no longer matches Factory state');
   if (item.activeRun) fail(409, 'An active Workflow Run owns this Work Item');
-  if (transition.handling === 'workflow') fail(409, 'Workflow not installed');
+  if (
+    transition.handling === 'workflow' &&
+    !(item.version === 3 && transition.id === 'request-review')
+  )
+    fail(409, 'Workflow not installed');
   const inputs = request.inputs as Record<string, string>;
   const prerequisite = inputs.readinessFact ?? inputs.finalizationFact;
   if (prerequisite) {
@@ -118,6 +126,22 @@ async function complete(
   request: Row,
 ) {
   const transition = await validateRequest(tx, item, request);
+  if (transition.handling === 'workflow') {
+    const result = await acceptIntake(
+      factory,
+      tx,
+      caller,
+      item,
+      String((request.inputs as any).reviewBrief),
+      request.approval,
+    );
+    const completed = await tx.put('transition_request', {
+      ...request,
+      status: 'completed',
+      result,
+    });
+    return { accepted: true, completed: false, request: completed, ...result };
+  }
   const sequence = Number(item.transitionSequence ?? 0) + 1;
   const workItem = await tx.put('work_item', {
     ...item,

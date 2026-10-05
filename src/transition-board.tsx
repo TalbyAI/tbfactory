@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { uiRead, uiWrite } from './ui-functions';
+import { ReviewPanel } from './review-panel';
 
 type View = { id: string; [key: string]: any };
 export function TransitionBoard({
@@ -129,7 +130,11 @@ export function TransitionBoard({
                   </p>
                   <p>
                     Workflow Run execution state:{' '}
-                    <strong>{item.workflowRun?.executionState ?? 'No active run'}</strong>
+                    <strong>
+                      {item.workflowRun?.status ??
+                        item.workflowRun?.executionState ??
+                        'No active run'}
+                    </strong>
                   </p>
                   <button
                     className="secondary"
@@ -139,6 +144,13 @@ export function TransitionBoard({
                     Open history
                   </button>
                   {!item.transitions.length && <p>No transitions in this retained version.</p>}
+                  {item.version === 3 && (
+                    <ReviewPanel
+                      organization={organization}
+                      item={item as { id: string; title: string }}
+                      onChange={refresh}
+                    />
+                  )}
                   {item.transitions.map((transition: any) => (
                     <form
                       key={transition.id}
@@ -161,7 +173,9 @@ export function TransitionBoard({
                           setMessage(
                             result.completed
                               ? 'State Transition completed.'
-                              : 'Transition Request accepted; awaiting Approval. Factory state is unchanged.',
+                              : result.workflowRun
+                                ? 'Review Intake Workflow accepted. Factory state is unchanged.'
+                                : 'Transition Request accepted; awaiting Approval. Factory state is unchanged.',
                           );
                           await openItem(result.workItem);
                         });
@@ -278,6 +292,7 @@ export function TransitionBoard({
               >
                 <option value="1">1 · registered only</option>
                 <option value="2">2 · review lifecycle</option>
+                <option value="3">3 · durable private review</option>
               </select>
             </label>
             <label>
