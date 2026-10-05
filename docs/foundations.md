@@ -26,6 +26,74 @@ Initial Workflows and Work Item Types are platform code. Organizations select an
 
 The initial deployment is one shared multi-Organization installation on a server or in containers. The separate worker adds a process while separating long-running execution from the HTTP request lifecycle. Exact scheduling, coordination, runtime versions, authentication protocol, and deployment settings belong to follow-up specifications.
 
+### Review Workflow checkpoint continuation
+
+The User clarified the Review Workflow direction on 2026-10-04 in
+[Generate a private report in a durable Review Workflow](../.scratch/factory-mvp/issues/05-durable-private-review-report.md#2026-10-04--human-checkpoint-continuation-repository-exploration-and-fact-driven-starts).
+That checkpoint owns the detailed decisions and unresolved contracts:
+
+- Review agents explore a repository checkout in a sandbox with Git, including
+  relevant unchanged files. MVP agents use Git, reading, and search only, and may
+  delegate to subordinate agents declared in platform source code. A supplied diff
+  is not required. Import records source/target branches as Facts and reports missing
+  fields by name. Review binds immutable source/target commits and compares changes
+  from their common ancestor; sandbox/retrieval contracts remain open.
+- Prove the MVP with an installation-operated Docker sandbox and an isolated,
+  recreable checkout per run. Additional Mastra-supported sandbox backends are
+  intended after that validation. Repositories may reference shared encrypted
+  Organization-owned Repository Access Credentials within provider/access scope;
+  agents never receive those credentials.
+- Pull request import initiates a Review Intake Workflow that preserves incomplete
+  Work Items, notifies missing fields, and waits for required Facts supplied by the
+  User or another process. It emits a review-start eligibility Fact once its
+  preconditions are satisfied. Intake keeps exclusive run ownership while waiting
+  and completes with a durable handoff before review starts. Missing-field
+  notifications are persistent in-app records. Eligibility does not grant
+  execution authority or replace Approval.
+  Manual reviews enter the same intake using the same required Facts.
+- Organizations may subscribe to platform AI or configure their own provider API
+  key, URL, model, reasoning effort, and supported settings. API compatibility and
+  provider restrictions follow Mastra capabilities. Entitlement/accounting
+  contracts remain to be specified while preserving
+  Organization isolation and Activity authorization.
+  Platform AI entitlement is activated/revoked operationally per Organization,
+  with consumption records; contracting and billing are outside the MVP increment.
+  Runs retain provider, model, effort, and nonsecret configuration at start;
+  changes affect new runs, while rotation of the same credential can be used by
+  subsequent calls. Permission, credential, and entitlement revocation blocks
+  further dispatch. There is no implicit provider switch.
+- Cumulative model-call time and elapsed active execution time are separate budgets
+  shared across parent/subordinate agents. AI time excludes tools and sums concurrent
+  calls. Execution time includes checkout, tools, and coordination, excluding human
+  and timer waits. Configurable defaults are 40 model calls, 600 AI seconds,
+  1,200 active execution seconds, and four simultaneous subordinate agents;
+  stricter installation limits may reduce effective limits. Enforcement remains
+  a follow-up implementation contract.
+- Limit exhaustion and unknown AI outcomes stop visibly, preserving Facts,
+  completed results, and consumption. Incomplete reports are not exposed as
+  complete; uncertain calls remain counted without automatic replay. Ownership
+  is released only after execution is confirmed stopped.
+- The initial single-worker/manual-crash-recovery model and private report display
+  and Markdown download are agreed.
+- New Facts cause evaluation of platform and Organization preconditions, which can
+  derive Facts that initiate Workflows. The initial evaluation is deterministic;
+  nondeterministic evaluation remains future work. Initial rules are provided by
+  the platform and parameterized by Organization; starts follow the authorized
+  Transition Request path. Rule catalog, causal deduplication, and safe scheduling
+  need specification. This is distinct from the
+  deferred configurable Approval Point confirmation rules.
+- New commit Facts preserve the current review's results for the next review to
+  assess prior Findings as enriched, obsolete, or resolved. Related Findings are
+  proposals in a new immutable report requiring a new Review Decision. During
+  a human wait the User explicitly supersedes an outdated review, preserving its
+  report and closing its run without publication before the next run starts.
+  Ownership is released only after execution stops. Operation/schema details
+  remain implementation specifications.
+
+These agreements extend the follow-up design direction without approving its
+remaining contracts or changing accepted authorization, immutable Fact history,
+single-run ownership, or fixed human Finding confirmation.
+
 ```mermaid
 flowchart LR
     User["User"] --> Web["TanStack Start: UI and backend API"]

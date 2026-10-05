@@ -4,6 +4,7 @@ import { type Factory, type Operation } from './factory';
 import { type Authentication } from './auth';
 import { type OrganizationSecrets } from './secrets';
 import { ingestObservation } from './observations';
+import { type ReviewArtifacts } from './review-artifacts';
 
 export type Services = {
   auth: Authentication;
@@ -11,6 +12,7 @@ export type Services = {
   origin: string;
   secrets?: OrganizationSecrets;
   allowLoopbackHttp?: boolean;
+  artifacts?: ReviewArtifacts;
 };
 export const sessionCookie = '__Host-factory_session';
 export function cookieValue(request: Request, name: string) {
@@ -68,6 +70,14 @@ function route(url: URL, method: string): Operation {
       return { ...base, resource: p[4], action: 'invitation.revoke' };
   }
   if (p[3] === 'work-items') {
+    if (p.length === 6 && p[5] === 'reviews' && method === 'GET')
+      return { ...base, resource: p[4], action: 'review.list' };
+    if (p.length === 6 && p[5] === 'review-facts' && method === 'POST')
+      return { ...base, resource: p[4], action: 'review.facts' };
+    if (p.length === 6 && p[5] === 'review-approval' && method === 'POST')
+      return { ...base, resource: p[4], action: 'review.approve' };
+    if (p.length === 6 && p[5] === 'review-supersession' && method === 'POST')
+      return { ...base, resource: p[4], action: 'review.supersede' };
     if (p.length === 6 && p[5] === 'transition-requests' && ['GET', 'POST'].includes(method))
       return {
         ...base,
@@ -128,6 +138,28 @@ export async function handleHttp(request: Request, services: Services): Promise<
     );
     if (!['GET', 'HEAD'].includes(request.method) && caller.human)
       browserMutation(request, services.origin);
+    const artifactRoute =
+      /^\/api\/organizations\/([^/]+)\/work-items\/([^/]+)\/reviews\/([^/]+)\/artifact$/.exec(
+        url.pathname,
+      );
+    if (artifactRoute && request.method === 'GET') {
+      if (!services.artifacts) fail(503, 'Artifact storage unavailable');
+      const content = await services.artifacts.read(
+        services.factory.store,
+        caller,
+        artifactRoute[1],
+        artifactRoute[2],
+        artifactRoute[3],
+      );
+      return new Response(new Uint8Array(content), {
+        headers: {
+          'content-type': 'text/markdown; charset=utf-8',
+          'content-disposition': 'attachment; filename="private-review.md"',
+          'cache-control': 'no-store',
+          'x-content-type-options': 'nosniff',
+        },
+      });
+    }
     const operation = route(url, request.method);
     if (request.method === 'POST') {
       if (!request.headers.get('content-type')?.startsWith('application/json'))

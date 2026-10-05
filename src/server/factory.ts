@@ -17,6 +17,7 @@ import {
   invitationPreview,
 } from './invitations';
 import { definition, selection, selectionSchema } from './work-item-types';
+import { reviewOperation, reviewFactsSchema, reviewActionSchema } from './reviews';
 import {
   boardItem,
   transitionOperation,
@@ -83,6 +84,9 @@ export type Operation = {
   query?: Record<string, string>;
 };
 const inputSchemas: Record<string, z.ZodType> = {
+  'review.facts': reviewFactsSchema,
+  'review.approve': reviewActionSchema,
+  'review.supersede': reviewActionSchema,
   'type.manage': selectionSchema,
   'team.manage': teamSchema,
   'policy.manage': managedPolicySchema,
@@ -192,7 +196,7 @@ export class Factory {
       if (operation.action === 'type.list') {
         await authorized(tx, caller, 'organization.read', { organization });
         return {
-          definitions: [definition('pull-request-review', 1), definition('pull-request-review', 2)],
+          definitions: [1, 2, 3].map((version) => definition('pull-request-review', version)),
           selection: await selection(tx, organization),
         };
       }
@@ -318,6 +322,8 @@ export class Factory {
       }
       if (operation.action.startsWith('transition.'))
         return transitionOperation(this, tx, caller, operation, input, workItem!, scope, query);
+      if (operation.action.startsWith('review.'))
+        return reviewOperation(this, tx, caller, operation, input, workItem!);
       await authorized(tx, caller, operation.action, scope);
       if (operation.action === 'work-item.read') return workItem;
       if (operation.action === 'history.read')

@@ -22,8 +22,24 @@ export type Table =
   | 'team'
   | 'provider_source'
   | 'correspondence'
-  | 'observation_delivery';
+  | 'observation_delivery'
+  | 'workflow_run'
+  | 'review_report'
+  | 'review_config'
+  | 'repository_access'
+  | 'agent_call'
+  | 'notification'
+  | 'worker_owner'
+  | 'ai_resource';
 const fields: Record<Table, Record<string, string>> = {
+  worker_owner: { data: 'object' },
+  ai_resource: { organization: 'string', data: 'object' },
+  workflow_run: { organization: 'string', workItem: 'string', data: 'object' },
+  review_report: { organization: 'string', workItem: 'string', run: 'string', data: 'object' },
+  review_config: { organization: 'string', data: 'object' },
+  repository_access: { organization: 'string', data: 'object' },
+  agent_call: { organization: 'string', run: 'string', data: 'object' },
+  notification: { organization: 'string', workItem: 'string', data: 'object' },
   provider_source: {
     organization: 'string',
     source: 'string',

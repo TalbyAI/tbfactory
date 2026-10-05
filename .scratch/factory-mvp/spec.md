@@ -173,12 +173,23 @@ No concrete endpoints, schema fields, state names, scheduling algorithm, authent
 
 ## Decisions so far
 
+- [Generate a private report in a durable Review Workflow](issues/05-durable-private-review-report.md#resolution--2026-10-05): delivered exclusive intake/handoff, isolated Docker repository exploration, retained AI configuration and shared budgets, immutable private reports, human waits and conservative recovery with completed-call reuse; 59 checks plus built HTTP/UI/restart acceptance pass.
+
+- [Establish the Mastra Docker sandbox integration contract](issues/15-mastra-docker-sandbox-contract.md#resolution--2026-10-05): official DockerSandbox has declared compatibility with the selected core pin; use container-native checkout and platform Git/read/search tools, with runtime isolation/recovery validation still required.
+
+- [Establish the Mastra local sandbox integration boundary](issues/14-mastra-local-sandbox-contract.md#resolution--2026-10-05): per-run Workspace supports the local composition; host command isolation is opt-in and OS-specific, requiring restricted platform tools and validated backend isolation.
+
+- [Establish Mastra AI provider configuration constraints](issues/13-mastra-ai-provider-contracts.md#resolution--2026-10-04): Mastra supports router IDs, native model adapters, and OpenAI-compatible configurations; endpoint/effort capabilities are adapter-specific, and Factory owns isolation and cumulative budgets.
+
 - [Validate durable Workflow storage within one working day](issues/01-validate-durable-workflow-storage.md): select LibSQL after the candidate's incremental concurrent-update failure; retain SurrealDB for Factory data.
 - [Create an authenticated, Organization-scoped Work Item](issues/02-authenticated-organization-work-items.md#resolution--2026-10-03): delivered shared authenticated operations, immutable history, bounded Invitations/API credentials and recoverable key ring; public/UI, concurrency, restart and restoration checks pass.
 - [Execute authorized Transition Requests from the Kanban Board and API](issues/03-authorized-transition-requests.md#resolution--2026-10-03): delivered retained state-flow versions, atomic direct transitions, scoped Team policies and durable activity-bound Approval with current authorization rechecks; Workflow execution and explicit migration remain gated by their own issues.
 - [Ingest deduplicated pull request observations from both providers](issues/04-provider-observation-ingestion.md#resolution--2026-10-04): delivered native provider authentication, scoped encrypted sources, atomic correspondence and event deduplication, and immutable observation history; built HTTP/CLI, concurrency, restart and restoration checks pass, with real Workflow ingestion drills assigned to Issues 05 and 12.
 
 ## Out of Scope
+
+- Contracting and billing UI for platform AI in the initial review increment; Organization entitlement is activated/revoked operationally and consumption is recorded.
+- Additional sandbox backends before local MVP validation; subsequent adoption of Mastra-supported options remains the agreed follow-up direction.
 
 - Modifying source code, approving provider pull requests, or merging pull requests in the pilot.
 - Concrete task, feature, or other non-review processes; the general Work Item domain remains available without designing those lifecycles now.
