@@ -31,6 +31,7 @@ export const activities = [
   'review.generate',
   'review.supersede',
   'approval.review-generate',
+  'approval.review-decide',
   'workflow.read',
   'artifact.read',
   'repository.read',

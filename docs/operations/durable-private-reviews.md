@@ -151,8 +151,69 @@ runs are blocked. New source/target commits mark the report outdated; they do no
 replace it. `POST .../review-supersession` accepts `operationId` and `run` under
 `review.supersede`, preserves the stopped run's report and releases its human wait.
 A replacement receives prior reports and creates new proposed Findings with
-optional previous-Finding relationships. Review Decision and publication operations
-belong to subsequent tickets. Generation never changes Factory state.
+optional previous-Finding relationships. Generation never changes Factory state.
+
+## Consolidated human decisions and revalidation
+
+Version 3 declares `review.decide` as an Approval Point with the separate
+`approval.review-decide` authority. Submit through the authenticated browser
+session; API Credentials and Service Identities cannot supply human confirmation.
+Current same-Organization Membership, scoped Approval authority, `work-item.read`
+and `artifact.read` are required. The board form reaches the same API rules.
+
+`POST .../work-items/{item}/review-decisions` accepts:
+
+```json
+{
+  "operationId": "human-review-1",
+  "run": "bound-review-run",
+  "reportVersion": "bound-report-version",
+  "reviewed": true,
+  "findings": [
+    { "finding": "first-finding-id", "decision": "confirmed" },
+    { "finding": "second-finding-id", "decision": "rejected", "reason": "Intentional behavior" }
+  ]
+}
+```
+
+Supply exactly one decision for every Finding in that report version. Rejections
+require a nonblank reason. Empty reports require `reviewed: true` and `findings: []`.
+Incomplete, duplicate or foreign Finding submissions are rejected atomically.
+Report versions, proposed Findings and Markdown content remain immutable. The
+human submission creates a separate `review.decision` Fact. Corrections submit a
+complete replacement with `replaces` identifying the latest decision Fact; the
+new Fact also links it through `correctedFact`. Existing decision Facts remain intact.
+The same `operationId` and content returns the retained submission receipt.
+
+`GET .../reviews` includes private `decisions`, `reportStatus` and `runStatus`.
+Decision `usable` and report `current` are evaluated against the current report
+version and declared input Fact versions. The Workflow declares Repository,
+Work Item Type version and all supplied review fields (including optional source
+URL and draft flag) as relevant. A new Fact for one of those fields changes its
+version even if its value is identical. Unrelated notes, CI evidence without
+changed review fields and textual correction Facts do not invalidate a decision.
+Retained AI configuration changes still apply to new runs as described above.
+
+Generation Approval records its Activity, run, Execution Identity and relevant
+input versions. Relevant changes invalidate its use before Approval or dispatch;
+model/tool dispatch also rechecks versions and current execution authorization.
+Supersede the stopped `waiting-approval` run and request a replacement through the
+existing Transition Request path. The board exposes both operations.
+
+A submitted decision leaves the same run in `review-submitted`, retaining exclusive
+ownership until the worker resumes its persisted human checkpoint. The worker
+rechecks current relevant versions and execution authorization. Relevant changes
+enter `waiting-revalidation`; explicit supersession and a new `request-review`
+create a replacement report requiring renewed human confirmation. A permission or
+credential revocation enters `waiting-authorization`; restoring execution permission
+allows the same run to resume without repeating model calls. These report waits
+remain recoverable across restarts and allow explicit supersession once execution
+is stopped. A newer report also prevents reuse of an earlier report's decisions.
+
+Successful continuation records `workflow.completed` and releases ownership while
+leaving Factory state unchanged. The decision never grants publication authority;
+publication and lifecycle finalization remain separate subsequent operations.
+Rejected Findings and reasons stay within authorized Factory history and UI.
 
 ## Consumption and recovery
 

@@ -97,11 +97,27 @@ export function definition(type: unknown, version: unknown) {
     approvalPoints:
       version === 1
         ? []
-        : transitionDefinitions.map((t) => ({
-            id: t.approvalPoint,
-            executionActivity: `transition.${t.id}`,
-            approvalActivity: `approval.${t.id}`,
-          })),
+        : [
+            ...transitionDefinitions.map((t) => ({
+              id: t.approvalPoint,
+              executionActivity: `transition.${t.id}`,
+              approvalActivity: `approval.${t.id}`,
+            })),
+            ...(version === 3
+              ? [
+                  {
+                    id: 'review.generate',
+                    executionActivity: 'review.generate',
+                    approvalActivity: 'approval.review-generate',
+                  },
+                  {
+                    id: 'review.decide',
+                    executionActivity: 'review.decide',
+                    approvalActivity: 'approval.review-decide',
+                  },
+                ]
+              : []),
+          ],
   };
 }
 export async function selection(tx: Transaction, organization: string) {

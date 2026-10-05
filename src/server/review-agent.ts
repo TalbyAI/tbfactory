@@ -6,7 +6,13 @@ import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 import { digest, fail, stable } from './contracts';
 import { authorization } from './authorization';
-import { executionCaller, approvalBinding, scopeOf, type Run } from './reviews';
+import {
+  executionCaller,
+  approvalBinding,
+  reviewInputsCurrent,
+  scopeOf,
+  type Run,
+} from './reviews';
 import { validateEndpoint } from './review-configuration';
 import { type Store } from './store';
 import { type OrganizationSecrets } from './secrets';
@@ -47,6 +53,8 @@ export class ReviewAgent {
     )
       fail(409, 'Workflow ownership lost');
     const caller = await executionCaller(tx, run);
+    if (!(await reviewInputsCurrent(tx, item, run.data.inputs!)))
+      fail(409, 'Relevant review input versions changed');
     const transition = await authorization(tx, caller, 'transition.request-review', scopeOf(item));
     if (transition.requiresHuman && !run.data.requestApproval)
       fail(403, 'Transition Approval required');
