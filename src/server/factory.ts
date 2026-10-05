@@ -18,6 +18,11 @@ import {
 } from './invitations';
 import { definition, selection, selectionSchema } from './work-item-types';
 import {
+  publicationOperation,
+  publicationActionSchema,
+  publicationConfirmationSchema,
+} from './publications';
+import {
   reviewOperation,
   reviewFactsSchema,
   reviewActionSchema,
@@ -89,6 +94,10 @@ export type Operation = {
   query?: Record<string, string>;
 };
 const inputSchemas: Record<string, z.ZodType> = {
+  'publication.request': publicationActionSchema,
+  'publication.approve': publicationActionSchema,
+  'publication.reconcile': publicationActionSchema,
+  'publication.confirm': publicationConfirmationSchema,
   'review.facts': reviewFactsSchema,
   'review.approve': reviewActionSchema,
   'review.supersede': reviewActionSchema,
@@ -202,7 +211,7 @@ export class Factory {
       if (operation.action === 'type.list') {
         await authorized(tx, caller, 'organization.read', { organization });
         return {
-          definitions: [1, 2, 3].map((version) => definition('pull-request-review', version)),
+          definitions: [1, 2, 3, 4].map((version) => definition('pull-request-review', version)),
           selection: await selection(tx, organization),
         };
       }
@@ -330,6 +339,8 @@ export class Factory {
         return transitionOperation(this, tx, caller, operation, input, workItem!, scope, query);
       if (operation.action.startsWith('review.'))
         return reviewOperation(this, tx, caller, operation, input, workItem!);
+      if (operation.action.startsWith('publication.'))
+        return publicationOperation(this, tx, caller, operation, input, workItem!);
       await authorized(tx, caller, operation.action, scope);
       if (operation.action === 'work-item.read') return workItem;
       if (operation.action === 'history.read')

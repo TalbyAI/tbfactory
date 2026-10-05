@@ -13,7 +13,7 @@ export type TransitionId = (typeof transitionIds)[number];
 export const selectionSchema = z.strictObject({
   operationId: identifier,
   type: z.literal('pull-request-review'),
-  version: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+  version: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
   enabled: z.boolean(),
 });
 export const transitionInputs = {
@@ -74,8 +74,9 @@ export const transitionDefinitions = flow.map((transition) => ({
   inputs: Object.keys(transitionInputs[transition.id].shape),
   approvalPoint: `transition.${transition.id}`,
 }));
+export const supportsReview = (version: unknown) => version === 3 || version === 4;
 export function definition(type: unknown, version: unknown) {
-  if (type !== 'pull-request-review' || ![1, 2, 3].includes(Number(version)))
+  if (type !== 'pull-request-review' || ![1, 2, 3, 4].includes(Number(version)))
     fail(409, 'Retained Work Item Type unavailable');
   return {
     type: 'pull-request-review',
@@ -103,7 +104,7 @@ export function definition(type: unknown, version: unknown) {
               executionActivity: `transition.${t.id}`,
               approvalActivity: `approval.${t.id}`,
             })),
-            ...(version === 3
+            ...(supportsReview(version)
               ? [
                   {
                     id: 'review.generate',
@@ -114,6 +115,15 @@ export function definition(type: unknown, version: unknown) {
                     id: 'review.decide',
                     executionActivity: 'review.decide',
                     approvalActivity: 'approval.review-decide',
+                  },
+                ]
+              : []),
+            ...(version === 4
+              ? [
+                  {
+                    id: 'review.publish',
+                    executionActivity: 'review.publish',
+                    approvalActivity: 'approval.review-publish',
                   },
                 ]
               : []),

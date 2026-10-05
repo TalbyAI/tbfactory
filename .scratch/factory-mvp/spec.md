@@ -173,6 +173,8 @@ No concrete endpoints, schema fields, state names, scheduling algorithm, authent
 
 ## Decisions so far
 
+- [Publish confirmed Findings and reconcile uncertain outcomes](issues/07-confirmed-publication-and-reconciliation.md#resolution--2026-10-05): delivered separate execution/Approval checks, durable provider effects, exclusive evidence-based User recovery and UI/API history; 103 checks plus built HTTP/browser/restart acceptance pass. Publication requires new version 4 Work Items; retained versions await explicit Issue 11 migration.
+
 - [Submit and revalidate a consolidated Review Decision](issues/06-current-consolidated-review-decisions.md#resolution--2026-10-05): delivered complete human submissions, immutable corrections, input/report currentness, Activity-bound Approval rechecks and same-run continuation with unchanged Factory state; 69 checks plus production HTTP/browser/restart acceptance pass.
 
 - [Generate a private report in a durable Review Workflow](issues/05-durable-private-review-report.md#resolution--2026-10-05): delivered exclusive intake/handoff, isolated Docker repository exploration, retained AI configuration and shared budgets, immutable private reports, human waits and conservative recovery with completed-call reuse; 59 checks plus built HTTP/UI/restart acceptance pass.
