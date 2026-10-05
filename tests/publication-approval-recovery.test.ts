@@ -25,6 +25,48 @@ function confirm(f: Fixture, p: any, evidence = p.evidence) {
 }
 
 for (const provider of ['github', 'azure-devops'] as const) {
+  test(`${provider}: revoked reconciliation authority records an immutable uncertain outcome`, async () => {
+    const f = await publicationRuntime(provider);
+    try {
+      await policy(f, 'review.publish', 'human');
+      const waiting = (await f.act('review-publications')).body.publication;
+      assert.equal(waiting.status, 'waiting-approval');
+      assert.equal((await f.act('publication-reconciliation')).status, 200);
+      const denied = await policy(f, 'review.recover', 'deny');
+      await f.r.startWorker();
+      const view = await f.wait('uncertain');
+      const failures = view.publicationHistory.filter(
+        (row: any) => row.kind === 'publication.uncertain',
+      );
+      assert.equal(failures.length, 1);
+      assert.deepEqual(failures[0].payload, {
+        activity: waiting.id,
+        run: f.run.id,
+        attempt: waiting.attempt,
+        reason: 'Recovery authority unavailable',
+      });
+      assert.equal(view.publications[0].evidence, undefined);
+      assert.ok((await f.r.f.request(f.path)).body.activeRun);
+      await f.r.stopWorker();
+      await f.r.startWorker();
+      assert.deepEqual((await f.view()).publicationHistory, view.publicationHistory);
+      assert.equal(f.reads.length, 0);
+      assert.equal(f.posts.length, 0);
+      await f.r.f.store.transaction((tx) => tx.remove('policy', denied.id));
+      assert.equal((await f.act('publication-reconciliation')).status, 200);
+      const recovered = await f.wait('uncertain');
+      assert.deepEqual(
+        recovered.publicationHistory.find((row: any) => row.id === failures[0].id),
+        failures[0],
+      );
+      assert.ok(recovered.publications[0].evidence);
+      assert.equal((await confirm(f, recovered.publications[0])).status, 200);
+      assert.equal(f.posts.length, 0);
+    } finally {
+      await f.close();
+    }
+  });
+
   for (const change of ['inputs', 'credential'] as const) {
     test(`${provider}: ${change} invalidated during Approval wait can recover without a POST`, async () => {
       const f = await publicationRuntime(provider);

@@ -79,6 +79,18 @@ export class PublicationWorker {
           );
         } catch {
           await publicationState(tx, p, 'uncertain', { error: 'Recovery authority unavailable' });
+          await this.factory.fact(
+            tx,
+            { user: 'worker', human: false },
+            item,
+            'publication.uncertain',
+            {
+              activity: p.id,
+              run: p.run,
+              attempt: p.data.attempt,
+              reason: 'Recovery authority unavailable',
+            },
+          );
           return;
         }
       }
@@ -126,6 +138,18 @@ export class PublicationWorker {
           await publicationState(tx, p, 'blocked', {
             error: 'Publication credential unavailable',
           });
+          await this.factory.fact(
+            tx,
+            { user: 'worker', human: false },
+            item,
+            'publication.blocked',
+            {
+              activity: p.id,
+              run: p.run,
+              attempt: p.data.attempt,
+              reason: 'Publication credential unavailable',
+            },
+          );
           return;
         }
       }

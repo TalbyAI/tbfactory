@@ -246,9 +246,23 @@ for (const provider of ['github', 'azure-devops'] as const) {
         await tx.remove('secret', secrets[0].id);
       });
       await f.r.startWorker();
-      await f.wait('blocked');
+      const blocked = await f.wait('blocked');
+      const failures = blocked.publicationHistory.filter(
+        (row: any) => row.kind === 'publication.blocked',
+      );
+      assert.equal(failures.length, 1);
+      assert.deepEqual(failures[0].payload, {
+        activity: blocked.publications[0].id,
+        run: f.run.id,
+        attempt: blocked.publications[0].attempt,
+        reason: 'Publication credential unavailable',
+      });
       const view = await reconcile(f),
         p = view.publications[0];
+      assert.deepEqual(
+        view.publicationHistory.find((row: any) => row.id === failures[0].id),
+        failures[0],
+      );
       assert.ok(p.evidence, 'Recovery must record unavailable evidence even without credentials');
       const evidence = view.publicationHistory.find((row: any) => row.id === p.evidence).payload;
       assert.equal(evidence.unavailable, true);
