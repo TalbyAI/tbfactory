@@ -216,6 +216,100 @@ test('Scoped Approvals cannot be reused for another Organization or Work Item', 
   }
 });
 
+for (const blockedBy of [
+  'policy',
+  'membership',
+  'credential',
+  'transition-approval',
+  'generation-approval',
+] as const) {
+  test(`Authorization wait blocked by ${blockedBy} leaves capacity for queued runs and resumes after restoration`, async () => {
+    const f = fixture(2);
+    f.run.data.status = 'waiting-authorization';
+    if (blockedBy === 'credential') f.run.data.identity.credential = 'missing-credential';
+    if (blockedBy === 'generation-approval')
+      f.run.data.inputs!.fields.sourceCommit = 'c'.repeat(40);
+    await f.tx.put('workflow_run', f.run);
+    if (blockedBy === 'policy') {
+      const policy = (await f.tx.get('policy', 'review.generate'))!;
+      await f.tx.put('policy', { ...policy, effect: 'deny' });
+    }
+    if (blockedBy === 'membership') {
+      const membership = (await f.tx.get('membership', membershipId('alice', 'alpha')))!;
+      await f.tx.put('membership', { ...membership, active: false });
+    }
+    if (blockedBy === 'transition-approval') {
+      await f.tx.put('policy', {
+        ...(await f.tx.get('policy', 'transition.request-review'))!,
+        id: 'human-transition',
+        effect: 'human',
+      });
+    }
+    const queued: Run = {
+      ...structuredClone(f.run),
+      id: 'queued-run',
+      workItem: 'queued-item',
+      data: { ...structuredClone(f.run.data), status: 'queued' },
+    };
+    await f.tx.put('workflow_run', queued);
+    const worker = new ReviewWorker(f.store, f.secrets, {
+      directory: '.runtime/unused-authorization-test',
+      artifacts: '.runtime/unused-authorization-test',
+      image: '',
+      allowedHosts: [],
+      allowLoopback: false,
+      concurrency: 1,
+      limits: f.run.data.config!.limits,
+    });
+    await f.tx.put('worker_owner', { id: 'review', data: { owner: worker['owner'] } });
+    const dispatched: string[] = [];
+    // Hold execution open so each tick sees the same concurrency pressure as a real resume.
+    let finish!: () => void;
+    worker['execute'] = async (run) => {
+      dispatched.push(run.id);
+      await new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+    };
+    const before = structuredClone([...f.rows]);
+    for (let tick = 0; tick < 2; tick++) {
+      await worker.tick();
+      const tasks = [...worker['running'].values()];
+      finish();
+      await Promise.all(tasks);
+    }
+    assert.deepEqual(dispatched, [queued.id, queued.id]);
+    assert.deepEqual([...f.rows], before, 'Authorization polling must not write persisted rows');
+    if (blockedBy === 'policy') {
+      const policy = (await f.tx.get('policy', 'review.generate'))!;
+      await f.tx.put('policy', { ...policy, effect: 'allow' });
+    }
+    if (blockedBy === 'membership') {
+      const membership = (await f.tx.get('membership', membershipId('alice', 'alpha')))!;
+      await f.tx.put('membership', { ...membership, active: true });
+    }
+    if (blockedBy === 'credential') {
+      await f.tx.put('credential', {
+        id: 'missing-credential',
+        user: 'alice',
+        organization: 'alpha',
+        activities: ['transition.request-review', 'review.generate'],
+        expiresAt: Date.now() + 60000,
+        revoked: false,
+      });
+    }
+    if (blockedBy === 'transition-approval') f.run.data.requestApproval = { actor: 'alice' };
+    if (blockedBy === 'generation-approval' || blockedBy === 'credential')
+      f.run.data.approval = retainedApproval(f.run, 2);
+    await f.tx.put('workflow_run', f.run);
+    await worker.tick();
+    const tasks = [...worker['running'].values()];
+    finish();
+    await Promise.all(tasks);
+    assert.equal(dispatched.at(-1), f.run.id);
+  });
+}
+
 for (const version of [1, 2] as const) {
   test(`Generation accepts retained v${version} Approval and rejects changed inputs, configuration, identity and revoked authority`, async () => {
     const retained = fixture(version);

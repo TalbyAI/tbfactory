@@ -811,6 +811,30 @@ export class ReviewWorker {
         });
         if (missing.length) continue;
       }
+      if (run.data.status === 'waiting-authorization') {
+        const ready = await this.store.transaction(async (tx) => {
+          const item = await tx.get('work_item', run.workItem);
+          if (!item) return false;
+          try {
+            const caller = await executionCaller(tx, run);
+            const transition = await authorization(
+              tx,
+              caller,
+              'transition.request-review',
+              scopeOf(item),
+            );
+            const generation = await authorization(tx, caller, 'review.generate', scopeOf(item));
+            return !(
+              (transition.requiresHuman && !run.data.requestApproval) ||
+              (generation.requiresHuman && !generationApproved(run))
+            );
+          } catch (error: any) {
+            if ([403, 404].includes(error.status)) return false;
+            throw error;
+          }
+        });
+        if (!ready) continue;
+      }
       const task = this.execute(run)
         .catch(async (error) => {
           const current = (await this.store.transaction((tx) =>
