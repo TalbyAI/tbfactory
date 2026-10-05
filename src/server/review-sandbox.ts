@@ -6,6 +6,10 @@ import { type Run } from './reviews';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 const executeDocker = promisify(execFile);
+export function validateSandboxImage(image: string) {
+  if (!/^(?:sha256:[a-f0-9]{64}|[^\s]+@sha256:[a-f0-9]{64})$/.test(image))
+    throw Error('Sandbox image must be pinned by digest');
+}
 async function discardStoppedSandbox(run: Run) {
   const name = `factory-${run.id}`;
   try {
@@ -40,6 +44,7 @@ export async function confirmSandboxStopped(run: Run) {
       (await executeDocker('docker', ['inspect', name], { windowsHide: true })).stdout,
     )[0];
     if (stopped.State.Running) throw Error('Execution is not stopped');
+    await executeDocker('docker', ['rm', name], { windowsHide: true });
   } catch (e: any) {
     if (!/no such (?:object|container|image or container)/i.test(String(e.stderr))) throw e;
   }
@@ -53,8 +58,7 @@ export class RepositorySandbox {
     readonly run: Run,
     readonly image: string,
   ) {
-    if (!/^(?:sha256:[a-f0-9]{64}|[^\s]+@sha256:[a-f0-9]{64})$/.test(image))
-      throw Error('Sandbox image must be pinned by digest');
+    validateSandboxImage(image);
     this.sandbox = new DockerSandbox({
       id: `factory-${run.id}`,
       image,
@@ -96,6 +100,10 @@ export class RepositorySandbox {
     authorize: () => Promise<void>,
   ) {
     this.signal = signal;
+    const { sourceCommit, targetCommit, sourceUrl } = this.run.data.inputs!.fields;
+    for (const commit of [sourceCommit, targetCommit])
+      if (typeof commit !== 'string' || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(commit))
+        fail(422, 'Commit identifier must be a full object ID');
     await authorize();
     await discardStoppedSandbox(this.run);
     await this.sandbox.start({ abortSignal: signal });
@@ -118,7 +126,6 @@ export class RepositorySandbox {
       !info.HostConfig.SecurityOpt?.includes('no-new-privileges:true')
     )
       fail(503, 'Sandbox isolation policy mismatch');
-    const { sourceCommit, targetCommit, sourceUrl } = this.run.data.inputs!.fields;
     const urls = [sourceUrl ?? access.urls[0], access.urls[0]];
     if (urls.some((url) => !access.urls.includes(url)))
       fail(403, 'Repository credential scope denied');
@@ -152,6 +159,7 @@ export class RepositorySandbox {
           'fetch',
           '--no-tags',
           '--no-recurse-submodules',
+          '--end-of-options',
           urls[index],
           commit,
         ],
@@ -227,8 +235,12 @@ export class RepositorySandbox {
         source: this.run.data.inputs!.fields.sourceCommit,
       }),
     ).toString('base64url');
-    return JSON.parse(await this.execute('node', ['/opt/factory/repository-tool.mjs', encoded]))
-      .output;
+    const result = JSON.parse(
+      await this.execute('node', ['/opt/factory/repository-tool.mjs', encoded]),
+    );
+    return result.truncated
+      ? `${result.output}\n[Repository tool output truncated]`
+      : result.output;
   }
   async stop() {
     await confirmSandboxStopped(this.run);

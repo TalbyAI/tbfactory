@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { uiRead, uiWrite } from './ui-functions';
 
 export function ReviewPanel({
@@ -14,6 +14,7 @@ export function ReviewPanel({
   const [view, setView] = useState<any>(null),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false);
+  const operations = useRef(new Map<string, string>());
   async function refresh() {
     const result = await uiRead({ data: { path: `${path}/reviews` } });
     if (result.status === 200) setView(result.data);
@@ -27,9 +28,14 @@ export function ReviewPanel({
     setBusy(true);
     setError('');
     try {
+      const requestPath = `${path}/${endpoint}`;
+      const key = JSON.stringify([requestPath, body]);
+      const operationId = operations.current.get(key) ?? crypto.randomUUID();
+      operations.current.set(key, operationId);
       const response = await uiWrite({
-        data: { path: `${path}/${endpoint}`, body: { ...body, operationId: crypto.randomUUID() } },
+        data: { path: requestPath, body: { ...body, operationId } },
       });
+      if (response.status < 500) operations.current.delete(key);
       if (response.status >= 400) throw Error(response.data.error);
       await refresh();
       await onChange();

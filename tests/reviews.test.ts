@@ -4,7 +4,9 @@ import { fixture } from './support/factory.ts';
 import { reviewRuntime } from './support/review-runtime.ts';
 import { setPolicy } from '../src/server/operator.ts';
 import { serviceUser } from '../src/server/review-configuration.ts';
-import { recoverWorkerLock, recoverStoppedRun } from '../src/server/review-worker.ts';
+import { ReviewWorker, recoverWorkerLock, recoverStoppedRun } from '../src/server/review-worker.ts';
+import { RepositorySandbox } from '../src/server/review-sandbox.ts';
+import { type Run } from '../src/server/reviews.ts';
 import { join } from 'node:path';
 import { execFileSync, spawn } from 'node:child_process';
 import { writeFile, readFile, unlink } from 'node:fs/promises';
@@ -89,6 +91,84 @@ const startReview = (
     expectedState: 'registered',
     inputs: { reviewBrief: 'Inspect repository code' },
   });
+
+test('Invalid sandbox images are rejected before the worker acquires installation ownership', async () => {
+  const r = await reviewRuntime();
+  try {
+    const worker = new ReviewWorker(r.f.store, r.secrets, {
+      directory: join(r.directory, 'invalid-worker'),
+      artifacts: join(r.directory, 'artifacts'),
+      image: 'tbfactory-review:local',
+      allowedHosts: [],
+      allowLoopback: false,
+      concurrency: 1,
+      limits: r.configInput.limits,
+    });
+    try {
+      await assert.rejects(worker.start(), /Sandbox image must be pinned by digest/);
+      assert.equal(
+        await r.f.store.transaction((tx) => tx.get('worker_owner', 'review')),
+        undefined,
+      );
+    } finally {
+      await worker.close();
+    }
+  } finally {
+    await r.close();
+  }
+});
+
+test('Sandbox preparation rejects invalid commit Facts before contacting Docker or reading credentials', async () => {
+  for (const field of ['sourceCommit', 'targetCommit']) {
+    for (const commit of ['--upload-pack=malicious', 'abc123', 'g'.repeat(40), null]) {
+      const run = {
+        id: 'invalid-commit',
+        organization: 'alpha',
+        data: {
+          inputs: {
+            fields: { sourceCommit: 'a'.repeat(40), targetCommit: 'b'.repeat(40), [field]: commit },
+          },
+        },
+      } as unknown as Run;
+      const sandbox = new RepositorySandbox(run, `sha256:${'a'.repeat(64)}`);
+      await assert.rejects(
+        sandbox.prepare({}, {} as any, [], false, new AbortController().signal, async () => {}),
+        /Commit identifier must be a full object ID/,
+      );
+    }
+  }
+});
+
+test('Human-only Artifact policy hides private reports from API credentials', async () => {
+  const r = await reviewRuntime();
+  try {
+    const path = await r.createItem('human-artifacts');
+    await r.startWorker();
+    await startReview(r, path);
+    const view = await r.wait(path, 'waiting-review');
+    await setPolicy(r.f.store, {
+      organization: 'alpha',
+      user: r.f.alice.user.id,
+      activity: 'artifact.read',
+      scope: 'repository',
+      scopeId: 'alpha-repo',
+      effect: 'human',
+    });
+    const credential = await r.f.request('/api/organizations/alpha/api-credentials', {
+      operationId: 'artifact-key',
+      label: 'Report reader',
+      activities: ['work-item.read', 'workflow.read', 'artifact.read'],
+      expiresAt: Date.now() + 3600000,
+    });
+    assert.equal(credential.status, 200);
+    const api = await r.f.request(`${path}/reviews`, undefined, credential.body.token, true);
+    assert.equal(api.status, 200);
+    assert.deepEqual(api.body.reports, []);
+    assert.deepEqual((await r.f.request(`${path}/reviews`)).body.reports, view.reports);
+  } finally {
+    await r.close();
+  }
+});
 
 test('Imported pull requests keep exclusive incomplete intake across worker/database restart and accept observations during human review', async () => {
   const r = await reviewRuntime();
@@ -368,8 +448,14 @@ test('A crashed worker retains ownership until an operator confirms stopped exec
       await new Promise((res) => setTimeout(res, 100));
     assert.equal(r.requests.length, 1);
     const pid = worker.pid!;
-    worker.kill();
+    worker.kill('SIGKILL');
     await new Promise<void>((res) => worker.once('exit', () => res()));
+    assert.equal(
+      JSON.parse(await readFile(join(r.directory, 'worker', 'worker.lock'), 'utf8')).pid,
+      pid,
+    );
+    const owner = await r.f.store.transaction((tx) => tx.get('worker_owner', 'review'));
+    assert.equal((owner!.data as any).pid, pid);
     assert.ok((await r.f.request(path)).body.activeRun);
     await assert.rejects(r.startWorker(), /already owns database/);
     await writeFile(join(r.directory, 'worker', 'worker.lock'), '{');
@@ -410,6 +496,15 @@ test('A separate Mastra worker retains a private version-bound report across hum
     assert.equal(view.reports[0].relevantInputs.checkout.sourceCommit, r.head);
     assert.equal(view.reports[0].relevantInputs.checkout.baseline, r.target);
     assert.equal(view.reports[0].findings[0].location.path, 'unchanged.ts');
+    const reviewRun = view.runs.find((run: any) => run.workflow === 'review-v1');
+    assert.equal(
+      execFileSync(
+        'docker',
+        ['ps', '-a', '--filter', `name=^/factory-${reviewRun.id}$`, '--format', '{{.ID}}'],
+        { encoding: 'utf8', windowsHide: true },
+      ).trim(),
+      '',
+    );
     assert.equal((await r.f.request(path)).body.state, 'registered');
     assert.equal(view.runs.filter((run: any) => run.workflow === 'review-v1')[0].calls, 2);
     const download = await r.download(`${path}/reviews/${view.reports[0].id}/artifact`);

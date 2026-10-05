@@ -227,25 +227,23 @@ export async function reviewOperation(
       'organization = $organization AND workItem = $workItem',
       { organization: item.organization, workItem: item.id },
     );
-    const permitted = await authorization(tx, caller, 'artifact.read', scope)
+    const permitted = await authorized(tx, caller, 'artifact.read', scope)
       .then(() => true)
       .catch((e) => {
         if (e.status !== 403) throw e;
         return false;
       });
-    const calls = await tx.list('agent_call', 'organization = $organization', {
+    const calls = await tx.list('agent_call', 'organization = $organization AND run IN $runs', {
       organization: item.organization,
+      runs: runs.map((run) => run.id),
     });
-    const ids = new Set(runs.map((run) => run.id));
     return {
       runs: runs.map(runView),
       reports: permitted ? reports.map(reportView) : [],
-      consumption: calls
-        .filter((call) => ids.has(String(call.run)))
-        .map((call) => {
-          const { chunks: _chunks, result: _result, ...data } = call.data as any;
-          return { id: call.id, run: call.run, ...data };
-        }),
+      consumption: calls.map((call) => {
+        const { chunks: _chunks, result: _result, ...data } = call.data as any;
+        return { id: call.id, run: call.run, ...data };
+      }),
       notifications: notifications.map((n) => ({ id: n.id, ...(n.data as object) })),
       currentInputs: (await relevantFacts(tx, item)).fields,
     };

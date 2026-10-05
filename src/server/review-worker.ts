@@ -13,7 +13,7 @@ import { Factory } from './factory';
 import { type OrganizationSecrets } from './secrets';
 import { ReviewArtifacts, reportMarkdown, reportSchema } from './review-artifacts';
 import { ReviewAgent } from './review-agent';
-import { RepositorySandbox, confirmSandboxStopped } from './review-sandbox';
+import { RepositorySandbox, confirmSandboxStopped, validateSandboxImage } from './review-sandbox';
 import { limitsSchema, serviceUser } from './review-configuration';
 import {
   acceptIntake,
@@ -158,6 +158,7 @@ export class ReviewWorker {
     return inputs.missing;
   }
   async start() {
+    validateSandboxImage(this.settings.image);
     await mkdir(this.settings.directory, { recursive: true });
     try {
       await this.store.transaction(async (tx) => {
@@ -406,15 +407,16 @@ export class ReviewWorker {
       }
     }
     const controller = new AbortController();
-    this.controllers.set(id, controller);
-    let sandbox: RepositorySandbox;
+    let sandbox: RepositorySandbox | undefined;
     let agent: ReviewAgent | undefined;
-    const timeout = setTimeout(
-      () => controller.abort(new Error('Execution time limit exhausted')),
-      Math.max(1, run.data.config!.limits.executionMs - run.data.executionMs),
-    );
-    sandbox = new RepositorySandbox(run, this.settings.image);
+    let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
+      sandbox = new RepositorySandbox(run, this.settings.image);
+      this.controllers.set(id, controller);
+      timeout = setTimeout(
+        () => controller.abort(new Error('Execution time limit exhausted')),
+        Math.max(1, run.data.config!.limits.executionMs - run.data.executionMs),
+      );
       agent = new ReviewAgent(
         this.store,
         this.secrets,
@@ -501,8 +503,7 @@ export class ReviewWorker {
     } catch (error) {
       controller.abort();
       await agent?.drain();
-      const stopped = await sandbox
-        .stop()
+      const stopped = await (sandbox ? sandbox.stop() : confirmSandboxStopped(run))
         .then(() => true)
         .catch(() => false);
       await this.store.transaction(async (tx) => {

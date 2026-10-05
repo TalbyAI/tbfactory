@@ -36,7 +36,7 @@ const git = (args) =>
     {
       cwd: root,
       timeout: 10000,
-      maxBuffer: 32768,
+      maxBuffer: 16 * 1024 * 1024,
       encoding: 'utf8',
       env: {
         PATH: process.env.PATH,
@@ -97,4 +97,9 @@ else if (input.operation === 'diff') {
     input.path,
   ]);
 } else throw Error('Repository operation denied');
-console.log(JSON.stringify({ output }));
+let truncated = false;
+while (Buffer.byteLength(JSON.stringify({ output, truncated })) > 24000) {
+  output = output.slice(0, Math.floor(output.length * 0.8));
+  truncated = true;
+}
+console.log(JSON.stringify({ output, truncated }));
