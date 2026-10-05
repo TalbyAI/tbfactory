@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { digest, fail, identifier, stable } from './contracts';
 import { authorization, authorized, type Scope } from './authorization';
 import { page } from './factory';
-import { itemDefinition, transitionIds, transitionInputs } from './work-item-types';
+import { itemDefinition, supportsReview, transitionIds, transitionInputs } from './work-item-types';
 import { type Caller } from './auth';
 import { type Factory, type Operation } from './factory';
 import { type Row, type Transaction } from './store';
@@ -39,7 +39,7 @@ export async function boardItem(tx: Transaction, caller: Caller, item: Row) {
     let reason: string | null = item.activeRun
       ? 'Active Workflow Run'
       : transition.handling === 'workflow' &&
-          !(item.version === 3 && transition.id === 'request-review')
+          !(supportsReview(item.version) && transition.id === 'request-review')
         ? 'Workflow not installed'
         : null;
     let requiresApproval = false;
@@ -91,7 +91,7 @@ async function validateRequest(tx: Transaction, item: Row, request: Row) {
   if (item.activeRun) fail(409, 'An active Workflow Run owns this Work Item');
   if (
     transition.handling === 'workflow' &&
-    !(item.version === 3 && transition.id === 'request-review')
+    !(supportsReview(item.version) && transition.id === 'request-review')
   )
     fail(409, 'Workflow not installed');
   const inputs = request.inputs as Record<string, string>;

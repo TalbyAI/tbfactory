@@ -5,6 +5,13 @@ import { digest, fail, identifier, stable, text } from './contracts';
 import { type Caller } from './auth';
 import { type Factory, type Operation } from './factory';
 import { type Row, type Transaction } from './store';
+import {
+  publicationCanBeCorrected,
+  publicationForRun,
+  publicationView,
+  type Publication,
+} from './publications';
+import { supportsReview } from './work-item-types';
 
 export const reviewFields = z.strictObject({
   sourceBranch: z.string().min(1).max(300).optional(),
@@ -51,6 +58,7 @@ export type RunData = {
   report?: string;
   decision?: string;
   handoff?: string;
+  publication?: string;
   error?: string;
   sandbox?: Record<string, any>;
   calls: number;
@@ -145,7 +153,8 @@ export async function acceptIntake(
   requestApproval?: unknown,
   kind: 'user' | 'service' = caller.service ? 'service' : 'user',
 ) {
-  if (item.version !== 3) fail(409, 'Installed Review Workflow requires Work Item Type version 3');
+  if (!supportsReview(item.version))
+    fail(409, 'Installed Review Workflow requires Work Item Type version 3 or 4');
   if (item.activeRun) fail(409, 'An active Workflow Run owns this Work Item');
   const run: Run = {
     id: randomUUID(),
@@ -317,6 +326,28 @@ export async function reviewOperation(
     );
     return {
       runs: runs.map(runView),
+      publicationHistory: permitted
+        ? (
+            await tx.list('fact', 'organization = $organization AND workItem = $workItem', {
+              organization: item.organization,
+              workItem: item.id,
+            })
+          )
+            .filter((fact) => String(fact.kind).startsWith('publication.'))
+            .sort((a, b) => Number(a.recordedAt) - Number(b.recordedAt) || a.id.localeCompare(b.id))
+        : [],
+      publications: await Promise.all(
+        (
+          await tx.list(
+            'external_activity',
+            'organization = $organization AND workItem = $workItem',
+            { organization: item.organization, workItem: item.id },
+          )
+        ).map(async (row) => ({
+          ...publicationView(row),
+          correctionAllowed: permitted && (await publicationCanBeCorrected(tx, row as Publication)),
+        })),
+      ),
       runStatus: await Promise.all(
         runs
           .filter((run) => (run.data as RunData).inputs)
@@ -380,6 +411,8 @@ export async function reviewOperation(
   if (!run || run.organization !== item.organization || run.workItem !== item.id)
     fail(404, 'Resource not found');
   if (operation.action === 'review.decide') {
+    if (!(await publicationCanBeCorrected(tx, await publicationForRun(tx, run))))
+      fail(409, 'Publication already binds this Review Decision');
     if (!caller.human) fail(403, 'Human Review Decision required');
     await authorized(tx, caller, 'approval.review-decide', scope);
     await authorized(tx, caller, 'artifact.read', scope);

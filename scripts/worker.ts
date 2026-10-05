@@ -18,7 +18,7 @@ const worker = new ReviewWorker(store, secrets, {
   image: required('FACTORY_SANDBOX_IMAGE'),
   allowedHosts: (
     process.env.FACTORY_APPROVED_ENDPOINT_HOSTS ??
-    'openrouter.ai,api.openai.com,api.anthropic.com,github.com,dev.azure.com'
+    'openrouter.ai,api.openai.com,api.anthropic.com,github.com,api.github.com,dev.azure.com'
   ).split(','),
   allowLoopback: process.env.FACTORY_ALLOW_LOOPBACK_HTTP === 'true',
   concurrency: 4,

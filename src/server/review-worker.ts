@@ -27,6 +27,8 @@ import {
   decisionUsable,
 } from './reviews';
 import { transitionOperation } from './transitions';
+import { PublicationWorker } from './publication-worker';
+import { supportsReview } from './work-item-types';
 
 export type WorkerSettings = {
   directory: string;
@@ -47,6 +49,7 @@ export class ReviewWorker {
   private readonly owner = randomUUID();
   private readonly lock: string;
   readonly artifacts: ReviewArtifacts;
+  private readonly publications: PublicationWorker;
   constructor(
     readonly store: Store,
     readonly secrets: OrganizationSecrets,
@@ -54,6 +57,13 @@ export class ReviewWorker {
   ) {
     this.lock = join(resolve(settings.directory), 'worker.lock');
     this.artifacts = new ReviewArtifacts(settings.artifacts);
+    this.publications = new PublicationWorker(
+      store,
+      secrets,
+      this.owner,
+      settings.allowedHosts,
+      settings.allowLoopback,
+    );
     const schema = z.object({ run: z.string() });
     const intake = createStep({
       id: 'required-facts',
@@ -276,6 +286,10 @@ export class ReviewWorker {
       const runs = (await this.store.transaction((tx) => tx.list('workflow_run'))) as Run[];
       for (const run of runs) {
         if (['completed', 'superseded', 'stopped'].includes(run.data.status)) continue;
+        if (run.data.status.startsWith('publication-')) {
+          await this.publications.recoverInterrupted(run.id);
+          continue;
+        }
         const workflow = this.workflows[run.data.workflow];
         if (!workflow || run.data.status === 'running') {
           await this.update(
@@ -682,7 +696,7 @@ export class ReviewWorker {
         });
         for (const item of items) {
           if (
-            item.version !== 3 ||
+            !supportsReview(item.version) ||
             item.activeRun ||
             !['registered', 'ready-for-review'].includes(String(item.state))
           )
@@ -786,6 +800,8 @@ export class ReviewWorker {
           'waiting-prerequisites',
           'review-submitted',
           'waiting-authorization',
+          'publication-queued',
+          'publication-reconciliation-queued',
         ].includes(run.data.status)
       )
         continue;
@@ -837,6 +853,7 @@ export class ReviewWorker {
       }
       const task = this.execute(run)
         .catch(async (error) => {
+          if (run.data.status.startsWith('publication-')) return;
           const current = (await this.store.transaction((tx) =>
             tx.get('workflow_run', run.id),
           )) as Run;
@@ -852,6 +869,7 @@ export class ReviewWorker {
     }
   }
   private async execute(run: Run) {
+    if (run.data.status.startsWith('publication-')) return this.publications.process(run.id);
     const workflow = this.workflows[run.data.workflow];
     if (!workflow) {
       await this.update(run.id, 'recovery-required', 'Retained Workflow definition unavailable');

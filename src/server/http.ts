@@ -70,6 +70,16 @@ function route(url: URL, method: string): Operation {
       return { ...base, resource: p[4], action: 'invitation.revoke' };
   }
   if (p[3] === 'work-items') {
+    if (p.length === 6 && method === 'POST') {
+      const publicationActions: Record<string, string> = {
+        'review-publications': 'request',
+        'publication-approval': 'approve',
+        'publication-reconciliation': 'reconcile',
+        'publication-confirmation': 'confirm',
+      };
+      if (publicationActions[p[5]])
+        return { ...base, resource: p[4], action: `publication.${publicationActions[p[5]]}` };
+    }
     if (p.length === 6 && p[5] === 'review-decisions' && method === 'POST')
       return { ...base, resource: p[4], action: 'review.decide' };
     if (p.length === 6 && p[5] === 'reviews' && method === 'GET')

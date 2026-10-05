@@ -173,6 +173,10 @@ No concrete endpoints, schema fields, state names, scheduling algorithm, authent
 
 ## Decisions so far
 
+- [Approved publication boundaries](designs/confirmed-publication-and-reconciliation.md#user-approval--2026-10-05): retain version 4, explicit publication requests and same-run ownership; allow corrections after safe nonpublication with a new Activity; require sufficient recovery evidence and preserve positive matches. Version migration remains Issue 11; [manual correspondence](issues/16-explicit-manual-provider-correspondence.md) is deferred.
+
+- [Publish confirmed Findings and reconcile uncertain outcomes](issues/07-confirmed-publication-and-reconciliation.md#approved-approval-wait-recovery-correction--2026-10-05): delivered separate execution/Approval checks, corrections after safe nonpublication with new Activities, sufficient evidence and persistent positive matches, evidence-based recovery from Approval waits, durable recovery and UI/API history; 128 checks plus built HTTP/browser/restart acceptance pass. Publication requires version 4; retained versions await Issue 11 migration and explicit manual correspondence remains deferred.
+
 - [Submit and revalidate a consolidated Review Decision](issues/06-current-consolidated-review-decisions.md#resolution--2026-10-05): delivered complete human submissions, immutable corrections, input/report currentness, Activity-bound Approval rechecks and same-run continuation with unchanged Factory state; 69 checks plus production HTTP/browser/restart acceptance pass.
 
 - [Generate a private report in a durable Review Workflow](issues/05-durable-private-review-report.md#resolution--2026-10-05): delivered exclusive intake/handoff, isolated Docker repository exploration, retained AI configuration and shared budgets, immutable private reports, human waits and conservative recovery with completed-call reuse; 59 checks plus built HTTP/UI/restart acceptance pass.

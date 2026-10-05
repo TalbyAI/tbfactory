@@ -7,6 +7,7 @@ import { OrganizationSecrets } from '../src/server/secrets';
 import { z } from 'zod';
 import { identifier, text } from '../src/server/contracts';
 import { putSource } from '../src/server/observations';
+import { putPublicationConfiguration } from '../src/server/publication-provider';
 import {
   putReviewConfiguration,
   putRepositoryAccess,
@@ -47,10 +48,18 @@ try {
     const secrets = new OrganizationSecrets(store, ring);
     const allowedHosts = (
       process.env.FACTORY_APPROVED_ENDPOINT_HOSTS ??
-      'openrouter.ai,api.openai.com,api.anthropic.com,github.com,dev.azure.com'
+      'openrouter.ai,api.openai.com,api.anthropic.com,github.com,api.github.com,dev.azure.com'
     ).split(',');
     const allowLoopback = process.env.FACTORY_ALLOW_LOOPBACK_HTTP === 'true';
     if (command === 'source-put') result = await putSource(store, secrets, await input());
+    else if (command === 'publication-configure')
+      result = await putPublicationConfiguration(
+        store,
+        secrets,
+        await input(),
+        allowedHosts,
+        allowLoopback,
+      );
     else if (command === 'review-resource-revoke')
       result = await revokeReviewResource(store, await input());
     else if (command === 'review-configure')

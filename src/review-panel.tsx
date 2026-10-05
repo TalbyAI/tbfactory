@@ -7,7 +7,7 @@ export function ReviewPanel({
   onChange,
 }: {
   organization: string;
-  item: { id: string; title: string };
+  item: { id: string; title: string; version: number };
   onChange: () => Promise<void>;
 }) {
   const path = `/api/organizations/${organization}/work-items/${item.id}`;
@@ -120,7 +120,9 @@ export function ReviewPanel({
         const run = view.runs.find((r: any) => r.id === report.run);
         const decision = view.decisions.find((d: any) => d.id === run?.decision);
         const current = view.reportStatus.find((s: any) => s.report === report.id)?.current;
+        const publication = view.publications.find((p: any) => p.id === run?.publication);
         const canReview =
+          (!run?.publication || publication?.correctionAllowed) &&
           current &&
           (['waiting-review', 'waiting-revalidation'].includes(run?.status) ||
             (!active && run?.status === 'completed'));
@@ -172,6 +174,32 @@ export function ReviewPanel({
               </p>
             )}
             <a href={`${path}/reviews/${report.id}/artifact`}>Download private Markdown report</a>
+            {item.version === 4 &&
+              decision?.usable &&
+              run?.status === 'completed' &&
+              !active &&
+              (!run.publication ||
+                (publication?.correctionAllowed && publication.decision !== decision.id)) && (
+                <button
+                  disabled={busy}
+                  onClick={() =>
+                    void write('review-publications', { run: run.id, decision: decision.id })
+                  }
+                >
+                  Request publication of confirmed Findings
+                </button>
+              )}
+            {(view.publications ?? [])
+              .filter((p: any) => p.run === report.run)
+              .map((p: any) => (
+                <PublicationPanel
+                  key={p.id}
+                  publication={p}
+                  history={view.publicationHistory ?? []}
+                  busy={busy}
+                  write={write}
+                />
+              ))}
             {view.decisions
               .filter((d: any) => d.payload.reportVersion === report.id)
               .map((d: any) => (
@@ -221,6 +249,165 @@ export function ReviewPanel({
           </details>
         );
       })}
+    </section>
+  );
+}
+
+function PublicationPanel({
+  publication: p,
+  history,
+  busy,
+  write,
+}: {
+  publication: any;
+  history: any[];
+  busy: boolean;
+  write: (endpoint: string, body: Record<string, unknown>) => Promise<void>;
+}) {
+  const evidence = history.find((f) => f.id === p.evidence)?.payload;
+  const [reason, setReason] = useState('');
+  const [resolution, setResolution] = useState('completed');
+  const [confirmedStopped, setConfirmedStopped] = useState(false);
+  const recoverable = ['uncertain', 'failed', 'blocked'].includes(p.status);
+  const canComplete = !!evidence?.matches.length;
+  const canRetry = !!evidence?.complete && !evidence.unavailable && !canComplete;
+  const canStop = canRetry || (!!evidence?.noDispatch && !canComplete);
+  const allowed =
+    resolution === 'completed'
+      ? canComplete
+      : resolution === 'retry'
+        ? canRetry
+        : resolution === 'not-published' && canStop;
+  useEffect(() => {
+    setResolution(canComplete ? 'completed' : canStop ? 'not-published' : '');
+    setReason('');
+    setConfirmedStopped(false);
+  }, [p.evidence, canComplete, canStop]);
+  return (
+    <section aria-label="Publication and recovery">
+      <h5>
+        Publication: {p.status} · Attempt {p.attempt}
+      </h5>
+      <p>
+        Destination: {p.destination.external.provider} · Pull request {p.destination.number}
+      </p>
+      {p.error && <p role="status">{p.error}</p>}
+      {p.effect && <p>Completed provider comment: {p.effect.id}</p>}
+      {p.effects?.length > 1 && (
+        <p role="status">
+          Possible duplicate publication. Matching provider comments:{' '}
+          {p.effects.map((effect: any) => effect.id).join(', ')}. Another attempt is prohibited.
+        </p>
+      )}
+      {p.status === 'waiting-approval' && (
+        <button
+          disabled={busy}
+          onClick={() => void write('publication-approval', { run: p.run, publication: p.id })}
+        >
+          Approve this publication Activity
+        </button>
+      )}
+      {(recoverable || p.status === 'waiting-approval') && (
+        <button
+          disabled={busy}
+          onClick={() =>
+            void write('publication-reconciliation', { run: p.run, publication: p.id })
+          }
+        >
+          Gather provider evidence
+        </button>
+      )}
+      {evidence && (
+        <p>
+          Provider evidence: {evidence.matches.length} matching effects.{' '}
+          {evidence.complete ? 'Listing complete.' : 'Listing incomplete or unavailable.'} Absence
+          does not prove that publication failed.{' '}
+          {recoverable ? 'User confirmation is required.' : 'Recovery decision recorded.'}
+        </p>
+      )}
+      {recoverable && evidence && !canComplete && !canStop && (
+        <p role="status">
+          Evidence is insufficient to resolve publication or authorize another attempt. Gather
+          provider evidence again; the outcome remains unresolved.
+        </p>
+      )}
+      {recoverable && evidence && canComplete && evidence.matches.length > 1 && (
+        <p role="status">
+          Possible duplicate publication. Matching provider comments:{' '}
+          {evidence.matches.map((effect: any) => effect.id).join(', ')}. Another attempt is
+          prohibited.
+        </p>
+      )}
+      {recoverable && evidence?.noDispatch && !canComplete && (
+        <p>
+          The Factory never authorized a provider POST for this attempt. You may confirm the stopped
+          Activity as not published.
+        </p>
+      )}
+      {recoverable && evidence && (canComplete || canStop) && (
+        <form
+          aria-label="Confirm publication recovery"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!reason.trim() || !confirmedStopped || !allowed) return;
+            void write('publication-confirmation', {
+              run: p.run,
+              publication: p.id,
+              evidence: p.evidence,
+              resolution,
+              reason: reason.trim(),
+              confirmedStopped: true,
+            });
+          }}
+        >
+          <fieldset disabled={busy}>
+            <label>
+              Recovery decision
+              <select value={resolution} onChange={(event) => setResolution(event.target.value)}>
+                <option value="" disabled>
+                  Choose a recovery decision
+                </option>
+                {canComplete && <option value="completed">Confirm already published</option>}
+                {canStop && <option value="not-published">Confirm not published and stop</option>}
+                {canRetry && <option value="retry">Authorize a new publication attempt</option>}
+              </select>
+            </label>
+            <label>
+              Evidence and reason
+              <textarea
+                required
+                maxLength={10000}
+                value={reason}
+                onChange={(event) => setReason(event.target.value)}
+              />
+            </label>
+            <label className="review-confirmation">
+              <input
+                type="checkbox"
+                checked={confirmedStopped}
+                onChange={(event) => setConfirmedStopped(event.target.checked)}
+              />{' '}
+              I verified the provider outcome and confirm the previous attempt has stopped. A new
+              attempt may duplicate a publication if my conclusion is wrong.
+            </label>
+            <button disabled={busy || !reason.trim() || !confirmedStopped || !allowed}>
+              Record recovery decision
+            </button>
+          </fieldset>
+        </form>
+      )}
+      <details>
+        <summary>Immutable publication history</summary>
+        {history
+          .filter((f) => f.payload.activity === p.id)
+          .map((f) => (
+            <p key={f.id}>
+              {f.kind} · User {f.actor}
+              {f.payload.resolution && ` · ${f.payload.resolution}`}
+              {f.payload.reason && ` · ${f.payload.reason}`}
+            </p>
+          ))}
+      </details>
     </section>
   );
 }

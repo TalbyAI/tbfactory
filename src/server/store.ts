@@ -30,8 +30,12 @@ export type Table =
   | 'agent_call'
   | 'notification'
   | 'worker_owner'
-  | 'ai_resource';
+  | 'ai_resource'
+  | 'publication_config'
+  | 'external_activity';
 const fields: Record<Table, Record<string, string>> = {
+  publication_config: { organization: 'string', data: 'object' },
+  external_activity: { organization: 'string', workItem: 'string', run: 'string', data: 'object' },
   worker_owner: { data: 'object' },
   ai_resource: { organization: 'string', data: 'object' },
   workflow_run: { organization: 'string', workItem: 'string', data: 'object' },

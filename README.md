@@ -160,6 +160,9 @@ remain the installation ticket's responsibility.
 
 ## Verification
 
+Confirmed publication setup and evidence-based recovery are documented in
+[confirmed publication](docs/operations/confirmed-publication.md).
+
 Start the dedicated persistent acceptance database described in the runbook, then:
 
 ```powershell
