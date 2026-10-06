@@ -49,14 +49,24 @@ publication/correction rules; completed publication is not silently edited.
 
 Keep GitHub pull request comments and Azure DevOps pull request comment threads
 as the destinations already implemented by Issue 07. Add a versioned Repository
-publication-configuration mode for a report reference; existing configuration
-defaults to confirmed-content comments. Add Work Item Type version 5 declaring
+publication-configuration default mode; existing configuration defaults to
+confirmed-content comments. Record the selected mode in initial Work Item
+configuration at creation/import, allowing an explicit initial override. The
+Workflow uses that retained Work Item selection, not a later change to the
+Repository default. A reference mode requires a type supporting sharing; reject
+incompatible creation/import configuration. Existing Work Items without a mode
+retain confirmed-content comments. The Repository still fixes the authorized
+provider destination and credential, never a client-supplied destination URL.
+
+Add Work Item Type version 5 declaring
 the sharing and revocation Approval Points alongside the existing publication
 Approval Point. Definitions 1–4 remain unchanged; version 4 keeps its existing
 confirmed-content publication behavior. Reference sharing requires version 5.
-Organizations select version 5 for new Work Items; existing Work Items need the
-explicit migration owned by Issue 11 and a new review/current Review Decision.
-Manual Work Item correspondence remains Issue 16.
+Organizations select version 5 for new Work Items. Reference sharing for retained
+versions is outside this increment: Issue 11 currently specifies version-3 to
+version-4 migration only. Extending migration to version 5 requires a separately
+approved contract and a new review/current Review Decision, without rewriting
+retained inputs or history. Manual Work Item correspondence remains Issue 16.
 
 Creating a share requires an explicit authenticated human request, private
 Artifact access, Work Item access and independently scoped `artifact.share`
