@@ -108,6 +108,11 @@ production should prepare volume ownership and run with a dedicated restricted i
 Tests create isolated database names. Acceptance restarts only this named dedicated
 container, preserves its volume, and restores an export into another isolated database.
 Tests never consume production credentials or call real external providers.
+For focused checks against another disposable test database, set
+`FACTORY_TEST_DATABASE_URL` to its RPC endpoint. The fixture still uses the
+test-only account and a unique database name. Existing database-restart tests and
+acceptance scripts target `tbfactory-acceptance-db` explicitly; run those with the
+default endpoint and coordinate them with other checks using that container.
 If this dedicated test container already exists, use `docker start tbfactory-acceptance-db`
 instead of creating it again. Stop the acceptance app/provider and container after
 the drill; retain the volume and protected recovery files for investigation.
