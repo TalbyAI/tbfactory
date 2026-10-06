@@ -173,6 +173,8 @@ No concrete endpoints, schema fields, state names, scheduling algorithm, authent
 
 ## Decisions so far
 
+- [Retain definition versions and explicitly migrate Work Items](issues/11-retained-versions-and-explicit-migration.md#resolution--2026-10-06): delivered narrow authorized atomic migrations, unchanged retained lifecycle history and obsolete prior review evidence; eight focused checks and built HTTP/browser/restart acceptance pass.
+
 - [Finalize a Work Item through a separate Review Finalization Workflow](issues/10-separate-review-finalization.md#resolution--2026-10-06): delivered version-appropriate current evidence and authorization checks, exclusive durable finalization and atomic lifecycle completion; focused public checks plus built HTTP/browser/restart acceptance pass.
 
 - [Cancel a Workflow Run after a confirmed stop](issues/09-confirmed-workflow-run-cancellation.md#resolution--2026-10-06): delivered authorized immutable requests, confirmed-stop ownership release, conservative publication resolution and preserved history; eight focused checks plus built HTTP/browser/restart acceptance pass.
