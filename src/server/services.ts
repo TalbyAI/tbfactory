@@ -11,9 +11,11 @@ import {
 import { OrganizationSecrets } from './secrets';
 import { fail } from './contracts';
 import { ReviewArtifacts } from './review-artifacts';
+import { type Store } from './store';
 
 let services:
   | Promise<{
+      store: Store;
       auth: Authentication;
       factory: Factory;
       origin: string;
@@ -33,6 +35,7 @@ export async function getServices() {
         ? new ReviewArtifacts(process.env.FACTORY_ARTIFACT_DIRECTORY)
         : undefined;
       return {
+        store,
         auth: await Authentication.create(store, identityConfig()),
         factory: new Factory(store, lifetimeSettings(), { artifacts, origin: applicationOrigin() }),
         origin: applicationOrigin(),
@@ -52,3 +55,15 @@ export async function getServices() {
     throw error;
   }
 }
+
+/** Close the Store created by this built application instance after Nitro drains requests. */
+export async function closeServices() {
+  const pending = services;
+  services = undefined;
+  if (!pending) return;
+  const current = await pending.catch(() => undefined);
+  await current?.store.close();
+}
+
+const closeServicesKey = Symbol.for('tbfactory.server.close-services');
+(globalThis as any)[closeServicesKey] = closeServices;

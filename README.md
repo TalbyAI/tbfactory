@@ -166,16 +166,18 @@ remain the installation ticket's responsibility.
 
 Confirmed publication setup and evidence-based recovery are documented in
 [confirmed publication](docs/operations/confirmed-publication.md).
+The local installation, backup, restore, activation, and monthly drill procedure
+is in the [persistent shared installation runbook](docs/operations/persistent-shared-installation.md).
 
 Start the dedicated persistent acceptance database described in the runbook, then:
 
 ```powershell
 npm run typecheck
-npm test
 npm run build
+npm test
 npm run acceptance
 # Keep the tested application and self-hosted test provider available for UI checks:
-npx tsx tests/acceptance.ts --serve
+node node_modules/tsx/dist/cli.mjs tests/acceptance.ts --serve
 ```
 
 Tests use real SurrealDB transactions and a controlled external OIDC boundary. The

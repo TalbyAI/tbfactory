@@ -294,6 +294,27 @@ export async function reviewRuntime() {
     }
     worker = undefined;
   }
+  async function workerCommand(type: string, responseType: string, timeout = 30000) {
+    if (!worker || worker.exitCode !== null || worker.signalCode !== null)
+      throw Error('Review worker is not running');
+    const child = worker;
+    const id = randomUUID();
+    return new Promise<any>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        child.off('message', receive);
+        reject(Error(`Worker ${type} command timed out`));
+      }, timeout);
+      const receive = (message: any) => {
+        if (message?.id !== id) return;
+        clearTimeout(timer);
+        worker?.off('message', receive);
+        if (message.type === responseType) resolve(message);
+        else reject(Error(`Worker ${type} failed`));
+      };
+      child.on('message', receive);
+      child.send({ type, id });
+    });
+  }
   async function download(path: string, token = f.alice.token) {
     return handleHttp(
       new Request(`http://localhost:3000${path}`, {
@@ -354,6 +375,8 @@ export async function reviewRuntime() {
     wait,
     startWorker,
     stopWorker,
+    pauseWorker: () => workerCommand('pause-dispatch', 'dispatch-drained'),
+    resumeWorker: () => workerCommand('resume-dispatch', 'dispatch-resumed'),
     download,
     get worker() {
       return worker;

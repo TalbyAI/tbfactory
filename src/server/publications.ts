@@ -147,6 +147,12 @@ export async function publicationState(
   const item = (await tx.get('work_item', p.workItem))!;
   if ((item.activeRun as any)?.id !== p.run) fail(409, 'Publication ownership lost');
   const data = { ...p.data, ...changes, status };
+  if (status === 'reconciliation-queued') {
+    // A recovery-point dispatch reservation is only local evidence. Require a
+    // fresh provider observation after the human claims read-only reconciliation.
+    data.evidence = undefined;
+    data.dispatchAuthorized = undefined;
+  }
   const updated = { ...p, data };
   const terminal = ['completed', 'skipped', 'not-published'].includes(status);
   const runStatus = terminal ? 'completed' : `publication-${status}`;

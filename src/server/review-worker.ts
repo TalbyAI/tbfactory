@@ -30,6 +30,7 @@ import { transitionOperation } from './transitions';
 import { PublicationWorker } from './publication-worker';
 import { supportsReview } from './work-item-types';
 import { finalizationAuthorizationReady, reviewFinalizationWorkflow } from './review-finalization';
+import { readRestoreHold } from './restore-hold';
 
 export type WorkerSettings = {
   directory: string;
@@ -39,6 +40,7 @@ export type WorkerSettings = {
   allowLoopback: boolean;
   concurrency: number;
   limits: z.infer<typeof limitsSchema>;
+  restoreHold?: string;
 };
 
 async function terminalizeFinalizationRequest(
@@ -83,9 +85,12 @@ export class ReviewWorker {
   private readonly running = new Map<string, Promise<void>>();
   private readonly controllers = new Map<string, AbortController>();
   private stopping = false;
+  private dispatchPaused = false;
+  private tickInFlight?: Promise<void>;
   private ownsLock = false;
   private readonly owner = randomUUID();
   private readonly lock: string;
+  private restoreHold = undefined as Awaited<ReturnType<typeof readRestoreHold>>;
   readonly artifacts: ReviewArtifacts;
   private readonly publications: PublicationWorker;
   constructor(
@@ -191,6 +196,32 @@ export class ReviewWorker {
       'review-finalization-v1': reviewFinalizationWorkflow(this.store, this.owner),
     };
   }
+  async verifyPersistentSnapshots(runs: Array<{ id: string; workflow: string; status: string }>) {
+    this.storage = new LibSQLStore({
+      id: 'factory-workflow-recovery-check',
+      url: `file:${join(resolve(this.settings.directory), 'workflows.db').replaceAll('\\', '/')}`,
+    });
+    new Mastra({ storage: this.storage, workflows: this.workflows, logger: false });
+    await this.storage.init();
+    try {
+      for (const run of runs) {
+        const workflow = this.workflows[run.workflow];
+        if (!workflow) throw Error('Retained Workflow definition unavailable');
+        const snapshot = await workflow.getWorkflowRunById(run.id);
+        const suspended = ['waiting-inputs', 'waiting-review', 'waiting-revalidation'].includes(
+          run.status,
+        );
+        if (suspended && snapshot?.status !== 'suspended')
+          throw Error('Retained human-wait Workflow snapshot is unavailable or not suspended');
+        if (run.status.startsWith('publication-') && !snapshot)
+          throw Error('Retained publication Workflow snapshot is unavailable');
+        if (snapshot && !['suspended', 'success', 'failed'].includes(snapshot.status))
+          throw Error('Retained Workflow snapshot is in an unsafe execution state');
+      }
+    } finally {
+      await this.storage.close();
+    }
+  }
   private async completeReview(id: string) {
     return this.store.transaction(async (tx) => {
       const run = (await tx.get('workflow_run', id)) as Run;
@@ -290,6 +321,9 @@ export class ReviewWorker {
     return inputs.missing;
   }
   async start() {
+    this.restoreHold = await readRestoreHold(this.settings.restoreHold ?? this.settings.directory);
+    if (this.restoreHold && this.restoreHold.activatedAt === null)
+      throw Error('Restore hold is not activated; worker dispatch remains disabled');
     validateSandboxImage(this.settings.image);
     await mkdir(this.settings.directory, { recursive: true });
     try {
@@ -326,6 +360,7 @@ export class ReviewWorker {
       await this.storage.init();
       const runs = (await this.store.transaction((tx) => tx.list('workflow_run'))) as Run[];
       for (const run of runs) {
+        if (this.heldByRestore(run.id)) continue;
         if (
           ['completed', 'superseded', 'stopped', 'cancelled', 'rejected'].includes(run.data.status)
         )
@@ -872,6 +907,13 @@ export class ReviewWorker {
           const facts = await relevantFacts(tx, item);
           if (!facts.cause) continue;
           const cause = facts.cause;
+          if (
+            cause.kind === 'external.observation' &&
+            this.restoreHold?.activatedAt !== null &&
+            this.restoreHold?.activatedAt !== undefined &&
+            Number(cause.recordedAt) <= this.restoreHold.activatedAt
+          )
+            continue;
           if (cause.kind !== 'external.observation' && !config.enabled) continue;
           if (cause.kind !== 'external.observation' && !config.rules.enabled) continue;
           if (
@@ -950,21 +992,54 @@ export class ReviewWorker {
       }
     });
   }
+  pauseDispatch() {
+    this.dispatchPaused = true;
+  }
+  resumeDispatch() {
+    if (!this.stopping) this.dispatchPaused = false;
+  }
+  async waitForDispatchDrain() {
+    this.dispatchPaused = true;
+    while (this.tickInFlight || this.running.size) {
+      const pending = [...(this.tickInFlight ? [this.tickInFlight] : []), ...this.running.values()];
+      await Promise.allSettled(pending);
+    }
+    return { active: this.running.size, tick: Boolean(this.tickInFlight) };
+  }
   async tick() {
-    if (this.stopping) return;
+    if (this.stopping || this.dispatchPaused || this.tickInFlight) return;
+    const tick = this.tickCycle();
+    this.tickInFlight = tick;
+    try {
+      await tick;
+    } finally {
+      if (this.tickInFlight === tick) this.tickInFlight = undefined;
+    }
+  }
+  private async tickCycle() {
+    if (this.stopping || this.dispatchPaused) return;
+    this.restoreHold = await readRestoreHold(this.settings.restoreHold ?? this.settings.directory);
     await this.store.transaction(async (tx) => {
       if (((await tx.get('worker_owner', 'review'))?.data as any)?.owner !== this.owner)
         fail(409, 'Worker ownership lost');
     });
     const requested = (await this.store.transaction((tx) => tx.list('workflow_run'))) as Run[];
-    for (const run of requested)
-      if (this.cancellationPending(run)) await this.confirmRequestedCancellation(run.id);
+    if (this.dispatchPaused || this.stopping) return;
+    for (const run of requested) {
+      if (this.dispatchPaused || this.stopping) return;
+      if (!this.heldByRestore(run.id) && this.cancellationPending(run))
+        await this.confirmRequestedCancellation(run.id);
+    }
+    if (this.stopping || this.dispatchPaused || this.restoreHold?.activatedAt === null) return;
     await this.automaticStarts();
+    if (this.stopping || this.dispatchPaused) return;
     const runs = (await this.store.transaction((tx) => tx.list('workflow_run'))) as Run[];
     for (const run of runs) {
+      if (this.stopping || this.dispatchPaused) return;
       if (this.running.size >= this.settings.concurrency) break;
       if (
         this.running.has(run.id) ||
+        this.heldByRestore(run.id) ||
         ![
           'queued',
           'waiting-inputs',
@@ -998,6 +1073,7 @@ export class ReviewWorker {
         });
         if (missing.length) continue;
       }
+      if (this.stopping || this.dispatchPaused) return;
       if (run.data.status === 'waiting-authorization') {
         if (run.data.workflow === 'review-finalization-v1') {
           if (!(await finalizationAuthorizationReady(this.store, run, this.owner))) continue;
@@ -1026,6 +1102,7 @@ export class ReviewWorker {
           if (!ready) continue;
         }
       }
+      if (this.stopping || this.dispatchPaused) return;
       const task = this.execute(run)
         .catch(async (error) => {
           if (run.data.status.startsWith('publication-')) return;
@@ -1055,6 +1132,10 @@ export class ReviewWorker {
         });
       this.running.set(run.id, task);
     }
+  }
+  private heldByRestore(id: string) {
+    const disposition = this.restoreHold?.runs[id]?.disposition;
+    return Boolean(disposition && !['resume', 'reconcile'].includes(disposition));
   }
   private async execute(run: Run) {
     const controller = new AbortController();

@@ -4,5 +4,5 @@ import react from '@vitejs/plugin-react';
 import { nitro } from 'nitro/vite';
 
 export default defineConfig({
-  plugins: [tanstackStart(), react(), nitro({ preset: 'node-server' })],
+  plugins: [tanstackStart(), react(), nitro({ preset: 'node-server', serverDir: './server' })],
 });
