@@ -50,9 +50,13 @@ publication/correction rules; completed publication is not silently edited.
 Keep GitHub pull request comments and Azure DevOps pull request comment threads
 as the destinations already implemented by Issue 07. Add a versioned Repository
 publication-configuration mode for a report reference; existing configuration
-defaults to confirmed-content comments. Retain Work Item Type version 4 and its
-existing publication Approval Point; definitions 1–3 remain unchanged. Migration
-and manual Work Item correspondence remain Issues 11 and 16.
+defaults to confirmed-content comments. Add Work Item Type version 5 declaring
+the sharing and revocation Approval Points alongside the existing publication
+Approval Point. Definitions 1–4 remain unchanged; version 4 keeps its existing
+confirmed-content publication behavior. Reference sharing requires version 5.
+Organizations select version 5 for new Work Items; existing Work Items need the
+explicit migration owned by Issue 11 and a new review/current Review Decision.
+Manual Work Item correspondence remains Issue 16.
 
 Creating a share requires an explicit authenticated human request, private
 Artifact access, Work Item access and independently scoped `artifact.share`
