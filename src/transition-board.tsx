@@ -143,6 +143,38 @@ export function TransitionBoard({
                   >
                     Open history
                   </button>
+                  {item.migration?.targetVersion && (
+                    <form
+                      aria-label="Migrate Work Item type version"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        void perform(async () => {
+                          const result = await write(
+                            `${base}/work-items/${item.id}/type-migrations`,
+                            {
+                              expectedState: item.state,
+                              expectedVersion: item.version,
+                              targetVersion: item.migration.targetVersion,
+                              expectedTransitionSequence: item.transitionSequence ?? 0,
+                            },
+                          );
+                          setMessage(
+                            `Work Item migrated to type version ${result.workItem.version}. Factory state and history were preserved.`,
+                          );
+                        });
+                      }}
+                    >
+                      <p>Explicit migration to type version {item.migration.targetVersion}.</p>
+                      {item.migration.requiresApproval && (
+                        <p>Current policy requires a human operator.</p>
+                      )}
+                      {item.migration.available ? (
+                        <button disabled={busy}>Migrate Work Item version</button>
+                      ) : (
+                        <p>{item.migration.reason}</p>
+                      )}
+                    </form>
+                  )}
                   {!item.transitions.length && <p>No transitions in this retained version.</p>}
                   {[3, 4, 5].includes(item.version) && (
                     <ReviewPanel

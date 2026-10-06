@@ -17,6 +17,7 @@ import {
   invitationPreview,
 } from './invitations';
 import { definition, selection, selectionSchema } from './work-item-types';
+import { migrateWorkItem, typeMigrationSchema } from './work-item-migrations';
 import { initialPublicationMode, publicationModeSchema } from './publication-provider';
 import { sharingOperation, shareCreationSchema, shareActionSchema } from './artifact-sharing';
 import { type ReviewArtifacts } from './review-artifacts';
@@ -112,6 +113,7 @@ const inputSchemas: Record<string, z.ZodType> = {
   'review.cancel': reviewActionSchema,
   'review.decide': reviewDecisionSchema,
   'type.manage': selectionSchema,
+  'work-item.migrate': typeMigrationSchema,
   'team.manage': teamSchema,
   'policy.manage': managedPolicySchema,
   'policy.remove': removePolicySchema,
@@ -347,6 +349,8 @@ export class Factory {
       }
       if (operation.action.startsWith('transition.'))
         return transitionOperation(this, tx, caller, operation, input, workItem!, scope, query);
+      if (operation.action === 'work-item.migrate')
+        return migrateWorkItem(this, tx, caller, operation, input, workItem!, scope);
       if (operation.action.startsWith('review.'))
         return reviewOperation(this, tx, caller, operation, input, workItem!);
       if (operation.action.startsWith('publication.'))

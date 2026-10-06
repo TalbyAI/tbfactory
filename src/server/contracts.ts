@@ -7,6 +7,7 @@ export const activities = [
   'work-item.create',
   'work-item.read',
   'history.read',
+  'work-item.migrate',
   'note.append',
   'correction.append',
   'reference.append',

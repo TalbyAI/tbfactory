@@ -10,6 +10,8 @@ import { activities } from '../src/server/contracts';
 const r = await reviewRuntime();
 const provider = await selfHostedProvider();
 const origin = 'http://localhost:3000';
+const testDatabaseContainer =
+  process.env.FACTORY_TEST_DATABASE_CONTAINER ?? 'tbfactory-acceptance-db';
 await provision(r.f.store, {
   organization: { id: 'alpha', name: 'Alpha' },
   projects: [],
@@ -91,14 +93,38 @@ try {
   await r.wait(path, 'waiting-inputs');
   await r.stopWorker();
   await stopWeb();
-  execFileSync('docker', ['restart', 'tbfactory-acceptance-db'], {
+  execFileSync('docker', ['restart', testDatabaseContainer], {
     windowsHide: true,
     stdio: 'pipe',
   });
   await startWeb();
   await r.startWorker();
   const intake = await browser.json(origin, `${path}/reviews`);
-  assert.equal(intake.body.runs[0].status, 'waiting-inputs');
+  const intakeRun = intake.body.runs.find(
+    (candidate: any) => candidate.workflow === 'review-intake-v1',
+  );
+  assert.equal(intakeRun.status, 'waiting-inputs');
+  assert.equal((await browser.json(origin, path)).body.version, 3);
+  assert.equal(
+    (
+      await browser.json(origin, `${base}/work-item-types`, {
+        operationId: 'select-v4-during-v3-run',
+        type: 'pull-request-review',
+        version: 4,
+        enabled: true,
+      })
+    ).status,
+    200,
+  );
+  const newVersionItem = await browser.json(origin, `${base}/work-items`, {
+    operationId: 'create-v4-during-v3-run',
+    title: 'New version 4 Work Item',
+    project: 'alpha-project',
+    repository: 'alpha-repo',
+    type: 'pull-request-review',
+  });
+  assert.equal(newVersionItem.body.workItem.version, 4);
+  assert.equal((await browser.json(origin, path)).body.version, 3);
   await browser.json(origin, `${path}/review-facts`, {
     operationId: 'inputs',
     fields: {
@@ -113,7 +139,7 @@ try {
   const count = r.requests.length;
   await r.stopWorker();
   await stopWeb();
-  execFileSync('docker', ['restart', 'tbfactory-acceptance-db'], {
+  execFileSync('docker', ['restart', testDatabaseContainer], {
     windowsHide: true,
     stdio: 'pipe',
   });
@@ -121,6 +147,9 @@ try {
   await r.startWorker();
   const recovered = await browser.json(origin, `${path}/reviews`);
   assert.equal(recovered.body.reports[0].id, report.id);
+  const recoveredReview = recovered.body.runs.find((candidate: any) => candidate.id === report.run);
+  assert.equal(recoveredReview.workflow, 'review-v1');
+  assert.equal(recoveredReview.inputs.typeVersion, 3);
   assert.equal(r.requests.length, count);
   const artifact = await browser.request(`${origin}${path}/reviews/${report.id}/artifact`);
   assert.equal(artifact.status, 200);
@@ -149,7 +178,7 @@ try {
   const decision = await browser.json(origin, `${path}/review-decisions`, decisionInput);
   assert.equal(decision.status, 200);
   await stopWeb();
-  execFileSync('docker', ['restart', 'tbfactory-acceptance-db'], {
+  execFileSync('docker', ['restart', testDatabaseContainer], {
     windowsHide: true,
     stdio: 'pipe',
   });
@@ -174,6 +203,20 @@ try {
   assert.equal(final.runs.find((r: any) => r.id === report.run).status, 'completed');
   assert.equal(final.decisions[0].usable, true);
   assert.equal(r.requests.length, count);
+
+  const migration = await browser.json(origin, `${path}/type-migrations`, {
+    operationId: 'migrate-reviewed-work-item',
+    expectedState: 'registered',
+    expectedVersion: 3,
+    targetVersion: 4,
+    expectedTransitionSequence: 0,
+  });
+  assert.equal(migration.status, 200);
+  assert.equal(migration.body.workItem.version, 4);
+  const migratedReviews = await browser.json(origin, `${path}/reviews`);
+  assert.equal(migratedReviews.body.reports[0].id, report.id);
+  assert.equal(migratedReviews.body.decisions[0].usable, false);
+
   const uiItems: Record<string, string> = {};
   if (process.argv.includes('--hold')) {
     for (const behavior of ['mixed', 'empty'] as const) {
@@ -200,12 +243,29 @@ try {
     });
     await r.wait(cancellationPath, 'waiting-review');
     uiItems.cancellation = cancellationPath.split('/').at(-1)!;
+
+    await browser.json(origin, `${base}/work-item-types`, {
+      operationId: 'select-v1-migration-ui',
+      type: 'pull-request-review',
+      version: 1,
+      enabled: true,
+    });
+    const migrationItem = await browser.json(origin, `${base}/work-items`, {
+      operationId: 'create-migration-ui',
+      title: 'Explicit migration Board drill',
+      project: 'alpha-project',
+      repository: 'alpha-repo',
+      type: 'pull-request-review',
+    });
+    assert.equal(migrationItem.body.workItem.version, 1);
+    uiItems.migration = migrationItem.body.workItem.id;
   }
   const evidence = {
     origin,
     url: `${origin}/?organization=alpha&workItem=${id}`,
     workItem: id,
     report: report.id,
+    migratedVersionFact: migration.body.fact.id,
     providerCalls: count,
     decision: decision.body.fact.id,
     uiItems,
@@ -218,8 +278,13 @@ try {
       'Incomplete decisions rejected through production HTTP',
       'Mixed human decisions and private rejection reasons persist through web/database restart',
       'Same waiting run resumes and completes without publication or Factory State Transition',
+      'A version-3 Workflow Run resumes after deployment under review-v1 while selection creates version-4 Work Items only',
+      'Explicit version-3 migration preserves the report and invalidates its Review Decision',
       ...(uiItems.cancellation
         ? ['Suspended-report cancellation Work Item is available for the protected browser drill']
+        : []),
+      ...(uiItems.migration
+        ? ['Version-1 Work Item is held for the protected explicit migration Board drill']
         : []),
     ],
     directory: r.directory,

@@ -14,12 +14,12 @@ Deploy updated platform-owned Workflows and Work Item Types while existing runs 
 
 ## Acceptance criteria
 
-- [ ] Record version-retention, migration validation, ownership, and persistence contracts before dependent implementation.
+- [x] Record version-retention, migration validation, ownership, and persistence contracts before dependent implementation.
 - [ ] Existing Workflow Runs resume under their original Workflow versions after deployment; definitions required by existing runs and Work Items remain available.
-- [ ] Existing Work Items retain their state-flow version and corresponding board semantics until an explicit migration.
-- [ ] Version-3 to version-4 migration invalidates the current report and Review Decision and requires a new review and human confirmation, unless the User explicitly approves a separate compatibility contract. Do not rewrite retained Workflow inputs, decisions, or Approval Facts to make them current.
-- [ ] An authorized migration validates the agreed mapping and prerequisites, records its outcome/history consistently, and respects active-run ownership.
-- [ ] Organizations can select/configure available new definitions without supplying executable code or silently changing existing runs/items.
+- [x] Existing Work Items retain their state-flow version and corresponding board semantics until an explicit migration.
+- [x] Version-3 to version-4 migration invalidates the current report and Review Decision and requires a new review and human confirmation, unless the User explicitly approves a separate compatibility contract. Do not rewrite retained Workflow inputs, decisions, or Approval Facts to make them current.
+- [x] An authorized migration validates the agreed mapping and prerequisites, records its outcome/history consistently, and respects active-run ownership.
+- [x] Organizations can select/configure available new definitions without supplying executable code or silently changing existing runs/items.
 - [ ] Provide public-flow and board checks across deployment using a suspended old-version run, an old-version Work Item, new-version work, rejected migration, and successful explicit migration.
 
 ## Blocked by
@@ -35,3 +35,23 @@ The User approved publication being restricted to version 4 until this explicit
 migration increment. Work Item Type version is a relevant Review Workflow input;
 changing it invalidates existing reports and Review Decisions. Selecting version 4
 only affects new Work Items and does not migrate existing provider correspondence.
+
+### Implementation — 2026-10-06
+
+The Issue 11 implementation contract is recorded in
+[the retained-version and migration design](../designs/retained-versions-and-explicit-migration.md).
+Public SurrealDB checks in [type-migrations.test.ts](../../../tests/type-migrations.test.ts)
+cover the fixed 1→2 and 3→4 mappings, retained readiness provenance and subsequent
+version-4 withdrawal, selection applying only to new Work Items, stale report and
+Review Decision invalidation, fresh version-4 review and human Decision, default
+and scoped authorization, cross-Organization isolation, pending Approval and
+cancellation-pending Workflow ownership, operation receipt replay/content conflict,
+concurrent requests, and database-interruption rollback/retry.
+
+The built review acceptance now verifies a suspended `review-intake-v1` and
+`review-v1` survive database restart under their original definitions, selection
+creates a new version-4 Work Item while the existing Work Item remains version 3,
+and explicit migration preserves the old report while invalidating its Decision.
+It also holds a version-1 Work Item for the protected Board migration drill. The
+root-owned built production and browser gate remains pending; the issue stays open
+until that gate passes.

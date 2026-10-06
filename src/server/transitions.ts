@@ -20,6 +20,7 @@ import {
   finalizationEvidence,
   transitionApprovalBinding,
 } from './review-finalization';
+import { migrationAvailability, preservedReadinessAfterMigration } from './work-item-migrations';
 
 export const transitionRequestSchema = z
   .strictObject({
@@ -79,10 +80,12 @@ export async function boardItem(tx: Transaction, caller: Caller, item: Row) {
       requiresApproval,
     });
   }
+  const migration = await migrationAvailability(tx, caller, item, scope);
   return {
     ...item,
     workflowRun: item.activeRun ?? null,
     readinessFact: current?.id ?? null,
+    migration,
     transitions,
   };
 }
@@ -125,6 +128,11 @@ async function validateRequest(tx: Transaction, item: Row, request: Row) {
       request.transition === 'withdraw-review'
         ? ['prepare-review', 'reopen-review']
         : ['finalize-review'];
+    const preservedReadiness =
+      request.transition === 'withdraw-review' &&
+      fact?.kind === 'state.transition' &&
+      Number(payload?.version) === 3 &&
+      (await preservedReadinessAfterMigration(tx, item, fact));
     if (
       !fact ||
       fact.organization !== item.organization ||
@@ -133,7 +141,7 @@ async function validateRequest(tx: Transaction, item: Row, request: Row) {
       !allowed.includes(String(payload?.transition)) ||
       payload?.to !== item.state ||
       payload?.sequence !== item.transitionSequence ||
-      payload?.version !== item.version
+      (payload?.version !== item.version && !preservedReadiness)
     )
       fail(409, 'Confirmed prerequisite Fact required');
   }
