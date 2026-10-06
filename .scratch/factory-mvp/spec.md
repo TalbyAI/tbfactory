@@ -173,6 +173,8 @@ No concrete endpoints, schema fields, state names, scheduling algorithm, authent
 
 ## Decisions so far
 
+- [Finalize a Work Item through a separate Review Finalization Workflow](issues/10-separate-review-finalization.md#resolution--2026-10-06): delivered version-appropriate current evidence and authorization checks, exclusive durable finalization and atomic lifecycle completion; focused public checks plus built HTTP/browser/restart acceptance pass.
+
 - [Cancel a Workflow Run after a confirmed stop](issues/09-confirmed-workflow-run-cancellation.md#resolution--2026-10-06): delivered authorized immutable requests, confirmed-stop ownership release, conservative publication resolution and preserved history; eight focused checks plus built HTTP/browser/restart acceptance pass.
 
 - [Publish an explicitly shared, limited report Artifact](issues/08-limited-report-artifact-sharing.md#resolution--2026-10-06): delivered version-5 immutable confirmed-only references, named-human recipient access, independent sharing/publication/revocation authorization, bounded expiry and permanent retained revocations; 147 checks plus built HTTP/browser/restart acceptance pass. Retained versions and provider recovery remain available; migration and manual correspondence remain separate increments.
