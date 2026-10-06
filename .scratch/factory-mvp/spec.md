@@ -173,6 +173,8 @@ No concrete endpoints, schema fields, state names, scheduling algorithm, authent
 
 ## Decisions so far
 
+- [Operate the persistent shared installation](issues/12-persistent-shared-installation.md#resolution--2026-10-06): delivered and verified the approved local web/worker installation, complete recovery bundles, activation holds and isolated restore drills; the final suite passes 179/179. Real deployment, independent recovery destination and measured production RTO remain pending.
+
 - [Retain definition versions and explicitly migrate Work Items](issues/11-retained-versions-and-explicit-migration.md#resolution--2026-10-06): delivered narrow authorized atomic migrations, unchanged retained lifecycle history and obsolete prior review evidence; eight focused checks and built HTTP/browser/restart acceptance pass.
 
 - [Finalize a Work Item through a separate Review Finalization Workflow](issues/10-separate-review-finalization.md#resolution--2026-10-06): delivered version-appropriate current evidence and authorization checks, exclusive durable finalization and atomic lifecycle completion; focused public checks plus built HTTP/browser/restart acceptance pass.

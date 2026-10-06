@@ -3,7 +3,7 @@
 Status: ready-for-agent
 Type: AFK
 Assignee: Codex
-State: open
+State: closed
 User stories covered: 41, 42, 50, 62, 65, 66, 67, 68
 
 ## Parent
@@ -17,13 +17,13 @@ Deliver a runnable shared server/container installation with separate TanStack S
 ## Acceptance criteria
 
 - [x] Record deployment, startup recovery, persistent-volume, and operational contracts before implementation; use the validated Workflow storage provider while retaining SurrealDB as the primary Factory database.
-- [ ] Operationalize the accepted policy in the [key-ring backup and recovery plan](../../../docs/operations/key-ring-backup.md): daily database backups, at least 30-day retention, verified ring backups before new-key activation, and monthly restore drills. Configure independent protected recovery storage and separate root-key custody, wire backup monitoring, and demonstrate restore without losing access to encrypted Organization secrets. Record the installation-specific destination and measured recovery-time objective before deployment.
-- [ ] Document installation and operation in English and exercise the public Factory flow with two Organizations, separate processes, real persistent stores, and controllable provider/AI boundaries.
-- [ ] Restart web, worker, and database around human waits and external Activities; retain run identities, outputs, completed effects, and required Workflow/state-flow definitions.
-- [ ] Verify Organization isolation, private and revoked Artifact access, AI configuration boundaries, continued Fact ingestion, cancellation ownership, and uncertain-publication recovery after restart.
-- [ ] Verify cancellation preserves already completed provider publication and Artifacts without allowing an overlapping run.
-- [ ] Include a small number of Kanban Board/UI scenarios confirming the same rules as the public API, including explicit finalization.
-- [ ] Provide the smallest runnable behavioral and operational checks covering the installation and the specification's restart/concurrency scenarios; do not introduce a separate speculative component-test framework or claim production provider exactly-once guarantees.
+- [x] Operationalize the approved local scope of the [key-ring backup and recovery plan](../../../docs/operations/key-ring-backup.md): runnable daily database backup and monthly restore drill commands, at least 30-day retention, verified ring backups before new-key activation, a configurable protected recovery destination, separate root-key custody, failed/overdue backup monitoring, and restored encrypted Organization secrets. Independent off-host recovery access, deployed scheduling and alert routing, and the installation-specific destination and measured recovery-time objective remain required before real deployment.
+- [x] Document installation and operation in English and exercise the public Factory flow with two Organizations, separate processes, real persistent stores, and controllable provider/AI boundaries.
+- [x] Restart web, worker, and database around human waits and external Activities; retain run identities, outputs, completed effects, and required Workflow/state-flow definitions.
+- [x] Verify Organization isolation, private and revoked Artifact access, AI configuration boundaries, continued Fact ingestion, cancellation ownership, and uncertain-publication recovery after restart.
+- [x] Verify cancellation preserves already completed provider publication and Artifacts without allowing an overlapping run.
+- [x] Include a small number of Kanban Board/UI scenarios confirming the same rules as the public API, including explicit finalization.
+- [x] Provide the smallest runnable behavioral and operational checks covering the installation and the specification's restart/concurrency scenarios; do not introduce a separate speculative component-test framework or claim production provider exactly-once guarantees.
 
 ## Blocked by
 
@@ -83,3 +83,31 @@ The Issue remains open for root's final full-suite and Board UI checks. This loc
 exercise does not verify off-host disaster recovery or establish a production
 recovery-time objective; destination and measured installation-specific RTO remain
 pending real deployment.
+
+### Resolution — 2026-10-06
+
+Delivered the approved local installation increment on `integration/factory-mvp`:
+separate built web and worker processes, a configurable complete recovery bundle,
+graceful dispatch drain, durable restore hold and explicit per-run activation,
+backup/drill health monitoring, and a verified isolated restore drill. The
+[delivery evidence](../evidence/persistent-shared-installation.md) records the
+public operational checks and native Kanban Board finalization. Cancellation and
+migration Board checks are linked from the preceding ticket resolutions.
+
+The [two-axis integration review](../evidence/integration-review.md) identified one
+Low duplication judgement call and one P1 live publication recovery regression;
+both were corrected and the existing two-provider regression passed afterward.
+The final complete `npm test` invocation passed 179/179 with no failures, skips,
+or cancellations. Build, typecheck, formatting, and diff checks passed. The full
+test log is `.runtime/factory-mvp-final-tests-retry.log` in this workspace.
+
+The first full invocation passed 178/179 with one worker-ownership startup error
+in the GitHub crash-recovery test. Three isolated repetitions and the final full
+invocation passed without changing the ownership guard; the original failure was
+not reproduced and its cause was not established.
+
+This closes the User-approved local scope. Real deployment remains pending:
+independent protected recovery storage and access, host scheduling and alert
+routing, and the installation-specific destination and measured production RTO
+must be established before deployment. The same-host drill does not satisfy
+off-host disaster recovery. Issue 16 remains explicitly deferred by User approval.
