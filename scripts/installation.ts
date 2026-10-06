@@ -79,6 +79,21 @@ async function readStatus(): Promise<StoredStatus> {
   }
 }
 
+function backupAndDrillHealth(status: StoredStatus, now: number) {
+  const lastBackup = status.backup?.state === 'succeeded' ? status.backup.completedAt : undefined;
+  const lastDrill = status.drill?.state === 'succeeded' ? status.drill.completedAt : undefined;
+  return {
+    backup: {
+      ...status.backup,
+      overdue: !lastBackup || now - lastBackup > 24 * 60 * 60 * 1000,
+    },
+    drill: {
+      ...status.drill,
+      overdue: !lastDrill || now - lastDrill > 31 * 24 * 60 * 60 * 1000,
+    },
+  };
+}
+
 async function writeStatus(status: StoredStatus) {
   await mkdir(recoveryDirectory(), { recursive: true, mode: 0o700 });
   await atomicWrite(statusPath(), JSON.stringify(status, null, 2));
@@ -362,9 +377,6 @@ class InstallationRuntime {
     const workerHold = await readRestoreHold(required('FACTORY_WORKER_DIRECTORY')).catch(
       () => undefined,
     );
-    const now = Date.now();
-    const lastBackup = stored.backup?.state === 'succeeded' ? stored.backup.completedAt : undefined;
-    const lastDrill = stored.drill?.state === 'succeeded' ? stored.drill.completedAt : undefined;
     return {
       coordinator: connected ? 'running' : 'stopped',
       web: Boolean(this.web && this.web.exitCode === null && this.web.signalCode === null),
@@ -379,14 +391,7 @@ class InstallationRuntime {
             ).length,
           }
         : undefined,
-      backup: {
-        ...stored.backup,
-        overdue: !lastBackup || now - lastBackup > 24 * 60 * 60 * 1000,
-      },
-      drill: {
-        ...stored.drill,
-        overdue: !lastDrill || now - lastDrill > 31 * 24 * 60 * 60 * 1000,
-      },
+      ...backupAndDrillHealth(stored, Date.now()),
     };
   }
 
@@ -688,19 +693,9 @@ async function printStatus() {
     return;
   } catch {
     const status = await readStatus();
-    const now = Date.now();
-    const lastBackup = status.backup?.state === 'succeeded' ? status.backup.completedAt : undefined;
-    const lastDrill = status.drill?.state === 'succeeded' ? status.drill.completedAt : undefined;
     const value = {
       coordinator: 'stopped',
-      backup: {
-        ...status.backup,
-        overdue: !lastBackup || now - lastBackup > 24 * 60 * 60 * 1000,
-      },
-      drill: {
-        ...status.drill,
-        overdue: !lastDrill || now - lastDrill > 31 * 24 * 60 * 60 * 1000,
-      },
+      ...backupAndDrillHealth(status, Date.now()),
     };
     console.log(JSON.stringify(value, null, 2));
     if (

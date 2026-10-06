@@ -148,10 +148,10 @@ export async function publicationState(
   if ((item.activeRun as any)?.id !== p.run) fail(409, 'Publication ownership lost');
   const data = { ...p.data, ...changes, status };
   if (status === 'reconciliation-queued') {
-    // A recovery-point dispatch reservation is only local evidence. Require a
-    // fresh provider observation after the human claims read-only reconciliation.
+    // Require a fresh provider observation after reconciliation is claimed, while
+    // retaining live proof that this attempt never authorized a provider POST.
+    // Installation recovery removes restored dispatch tracking before activation.
     data.evidence = undefined;
-    data.dispatchAuthorized = undefined;
   }
   const updated = { ...p, data };
   const terminal = ['completed', 'skipped', 'not-published'].includes(status);
