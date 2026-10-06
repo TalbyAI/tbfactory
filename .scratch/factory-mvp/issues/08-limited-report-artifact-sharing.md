@@ -1,6 +1,7 @@
 # Publish an explicitly shared, limited report Artifact
 
 Status: ready-for-human
+Assignee: Codex
 Type: HITL
 User stories covered: 25, 32, 33, 62, 63, 68
 
@@ -27,3 +28,14 @@ Human checkpoint: Agree and record content/reference versioning, publication des
 ## Blocked by
 
 - [Issue 07: Publish confirmed Findings and reconcile uncertain outcomes](07-confirmed-publication-and-reconciliation.md)
+
+## Comments
+
+### Human checkpoint proposal — 2026-10-06
+
+Issue 07 is closed and its publication/reconciliation implementation is available.
+The [sharing proposal](../designs/limited-report-artifact-sharing.md) records
+concrete options and a recommended contract for this issue's required human
+checkpoint. All new sharing choices remain proposals pending User agreement;
+dependent application implementation has not started. The ticket remains open
+and `ready-for-human` until that checkpoint is resolved.
