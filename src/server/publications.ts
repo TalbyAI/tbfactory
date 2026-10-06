@@ -8,12 +8,15 @@ import { type Row, type Transaction } from './store';
 import { decisionUsable, executionCaller, scopeOf, type Run } from './reviews';
 import { publicationDestination, type ProviderEffect } from './publication-provider';
 import { itemDefinition } from './work-item-types';
+import { activeShare, shareBinding } from './artifact-sharing';
+import { confirmedContent } from './publication-content';
 
 export const publicationActionSchema = z.strictObject({
   operationId: identifier,
   run: identifier,
   publication: identifier.optional(),
   decision: identifier.optional(),
+  reference: identifier.optional(),
 });
 export const publicationConfirmationSchema = publicationActionSchema.extend({
   evidence: identifier,
@@ -44,6 +47,9 @@ export type Publication = Row & {
     destination: Record<string, any>;
     identity: Run['data']['identity'];
     content: string;
+    reference?: string;
+    contentVersion?: string;
+    referenceBinding?: string;
     attempt: number;
     token: string;
     approval?: { actor: string; binding: string };
@@ -119,6 +125,13 @@ export const publicationBinding = (p: Publication) =>
       identity: p.data.identity,
       contentDigest: digest(p.data.content),
       attempt: p.data.attempt,
+      ...(p.data.reference
+        ? {
+            reference: p.data.reference,
+            contentVersion: p.data.contentVersion,
+            referenceBinding: p.data.referenceBinding,
+          }
+        : {}),
     }),
   );
 export const publicationContent = (p: Publication) =>
@@ -165,6 +178,18 @@ export async function publicationReady(tx: Transaction, p: Publication) {
     data: { ...run.data, identity: p.data.identity },
   });
   const permission = await authorization(tx, caller, 'review.publish', scopeOf(item));
+  if (p.data.reference) {
+    await authorized(tx, caller, 'work-item.read', scopeOf(item));
+    await authorized(tx, caller, 'artifact.read', scopeOf(item));
+    const share = await activeShare(tx, item, p.data.reference);
+    if (
+      share.data.decision !== p.data.decision ||
+      share.data.report !== p.data.report ||
+      share.data.contentVersion !== p.data.contentVersion ||
+      shareBinding(share) !== p.data.referenceBinding
+    )
+      fail(409, 'Report reference binding mismatch');
+  }
   if (permission.requiresHuman) {
     const approval = p.data.approval;
     if (!approval || approval.binding !== publicationBinding(p))
@@ -177,26 +202,6 @@ export async function publicationReady(tx: Transaction, p: Publication) {
     );
   }
   return caller;
-}
-
-const literal = (s: string) => s.replace(/[\\`*_{}\[\]<>#]/g, '\\$&');
-function confirmedContent(report: any, decision: any) {
-  const choices = decision.payload.findings;
-  const ids = new Set(choices.map((f: any) => f.finding));
-  if (
-    !decision.payload.reviewed ||
-    ids.size !== choices.length ||
-    ids.size !== report.findings.length ||
-    report.findings.some((f: any) => !ids.has(f.id))
-  )
-    fail(409, 'Complete Review Decision required');
-  const confirmed = new Set(
-    choices.filter((f: any) => f.decision === 'confirmed').map((f: any) => f.finding),
-  );
-  const findings = report.findings.filter((f: any) => confirmed.has(f.id));
-  return findings.length
-    ? `# Confirmed Findings\n\n${findings.map((f: any) => `## ${literal(f.title)} (${f.severity})\n\n${literal(f.explanation)}${f.location ? `\n\nLocation: ${literal(f.location.path)}:${f.location.line}` : ''}`).join('\n\n')}`
-    : '';
 }
 
 export async function publicationOperation(
@@ -232,7 +237,28 @@ export async function publicationOperation(
       if (!decision || !(await decisionUsable(tx, item, run, decision)))
         fail(409, 'Current human Review Decision required');
       const report = (await tx.get('review_report', run.data.report!))!;
-      const content = confirmedContent(report.data, decision);
+      let content = confirmedContent(report.data, decision);
+      let reference:
+        | { reference: string; contentVersion: string; referenceBinding: string }
+        | undefined;
+      if (item.publicationMode === 'report-reference' && content) {
+        if (item.version !== 5 || !input.reference)
+          fail(409, 'Explicit active report reference required');
+        const share = await activeShare(tx, item, input.reference);
+        if (
+          share.data.decision !== decision.id ||
+          share.data.report !== report.id ||
+          share.data.run !== run.id
+        )
+          fail(409, 'Current report reference required');
+        content = `[Confirmed Findings report](${share.data.url})`;
+        reference = {
+          reference: share.id,
+          contentVersion: share.data.contentVersion,
+          referenceBinding: shareBinding(share),
+        };
+      } else if (input.reference)
+        fail(422, 'Report reference incompatible with publication mode or empty output');
       if (Buffer.byteLength(content) > 60000)
         fail(422, 'Confirmed publication exceeds provider content limit');
       const destination = await publicationDestination(tx, item);
@@ -247,6 +273,7 @@ export async function publicationOperation(
           report: report.id,
           destination,
           content,
+          ...reference,
           identity: {
             kind: 'user',
             user: caller.user,
@@ -273,6 +300,7 @@ export async function publicationOperation(
         attempt: 1,
         contentDigest: digest(content),
         identity: p.data.identity,
+        ...reference,
       });
       return { publication: publicationView(p) };
     });

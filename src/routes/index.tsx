@@ -231,6 +231,9 @@ function FactoryPage() {
                               : {}),
                             title: data.get('title'),
                             type: data.get('type'),
+                            ...(data.get('publicationMode')
+                              ? { publicationMode: data.get('publicationMode') }
+                              : {}),
                           });
                           setItem(created.workItem);
                           await historyPage(created.workItem);
@@ -275,6 +278,16 @@ function FactoryPage() {
                         Work Item Type
                         <select name="type">
                           <option value="pull-request-review">pull-request-review</option>
+                        </select>
+                      </label>
+                      <label>
+                        Publication mode
+                        <select name="publicationMode" defaultValue="">
+                          <option value="">Repository default</option>
+                          <option value="confirmed-content">Confirmed-content comments</option>
+                          <option value="report-reference">
+                            Restricted report reference (version 5)
+                          </option>
                         </select>
                       </label>
                       <button disabled={busy || !project}>Create Work Item</button>

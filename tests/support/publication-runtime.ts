@@ -23,7 +23,11 @@ export async function waitPublicationRun(
   assert.fail(`Run did not reach ${status}: ${JSON.stringify(view)}`);
 }
 
-export async function publicationRuntime(provider: 'github' | 'azure-devops', empty = false) {
+export async function publicationRuntime(
+  provider: 'github' | 'azure-devops',
+  empty = false,
+  reference = false,
+) {
   const r = await reviewRuntime();
   const effects: any[] = [],
     posts: any[] = [],
@@ -123,7 +127,7 @@ export async function publicationRuntime(provider: 'github' | 'azure-devops', em
     await r.f.request('/api/organizations/alpha/work-item-types', {
       operationId: 'type',
       type: 'pull-request-review',
-      version: 4,
+      version: reference ? 5 : 4,
       enabled: true,
     });
     const source = sourceInput(provider);
@@ -144,6 +148,7 @@ export async function publicationRuntime(provider: 'github' | 'azure-devops', em
       delivery(source, payload),
       'alpha',
       provider,
+      reference ? 'report-reference' : undefined,
     );
     const path = `/api/organizations/alpha/work-items/${ingested.workItemId}`;
     r.behavior(empty ? 'empty' : 'mixed');
@@ -152,7 +157,7 @@ export async function publicationRuntime(provider: 'github' | 'azure-devops', em
         await r.f.request(`${path}/transition-requests`, {
           operationId: 'start',
           transition: 'request-review',
-          version: 4,
+          version: reference ? 5 : 4,
           expectedState: 'registered',
           inputs: { reviewBrief: 'Review code' },
         })

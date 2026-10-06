@@ -154,7 +154,7 @@ export async function acceptIntake(
   kind: 'user' | 'service' = caller.service ? 'service' : 'user',
 ) {
   if (!supportsReview(item.version))
-    fail(409, 'Installed Review Workflow requires Work Item Type version 3 or 4');
+    fail(409, 'Installed Review Workflow requires Work Item Type version 3, 4 or 5');
   if (item.activeRun) fail(409, 'An active Workflow Run owns this Work Item');
   const run: Run = {
     id: randomUUID(),

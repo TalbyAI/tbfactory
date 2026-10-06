@@ -8,6 +8,10 @@ Scoped Teams, State Transitions and provider-authenticated GitHub/Azure DevOps
 observation ingestion are available. A separate Mastra worker now runs durable
 Review Intake Workflows and repository reviews in an isolated Docker sandbox,
 retaining private reports and proposed Findings for human review.
+Explicitly authorized version-5 Work Items can publish restricted references to
+immutable confirmed-only report Artifacts. See the
+[sharing runbook](docs/operations/limited-report-sharing.md) for recipient access,
+expiry, Approval, revocation and retention.
 
 ## Runtime and commands
 

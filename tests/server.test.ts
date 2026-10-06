@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { spawn, execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -11,6 +12,9 @@ import { KeyRing } from '../src/server/key-ring.ts';
 test('TanStack Start serves login UI and public operations using persistent shared domain contracts', {
   timeout: 45000,
 }, async () => {
+  await promisify(execFile)(process.execPath, ['node_modules/vite/bin/vite.js', 'build'], {
+    windowsHide: true,
+  });
   const f = await fixture();
   const directory = await mkdtemp(join(tmpdir(), 'factory-server-'));
   const rootKey = randomBytes(32);
@@ -23,32 +27,30 @@ test('TanStack Start serves login UI and public operations using persistent shar
     installation: 'server-test',
     rootVersion: 'root-1',
   }).setup();
-  const server = spawn(
-    process.execPath,
-    ['node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', '18300', '--strictPort'],
-    {
-      windowsHide: true,
-      env: {
-        ...process.env,
-        FACTORY_DATABASE_URL: f.config.url,
-        FACTORY_DATABASE_NAMESPACE: f.config.namespace,
-        FACTORY_DATABASE_NAME: f.config.database,
-        FACTORY_DATABASE_USER: f.config.username,
-        FACTORY_DATABASE_PASSWORD: f.config.password,
-        FACTORY_ORIGIN: 'http://localhost:18300',
-        FACTORY_OIDC_ISSUER: f.op.issuer,
-        FACTORY_OIDC_CLIENT_ID: 'factory',
-        FACTORY_OIDC_CLIENT_SECRET: 'fixture-secret',
-        FACTORY_ALLOW_LOOPBACK_HTTP: 'true',
-        FACTORY_TRUST_VERIFIED_EMAIL: 'true',
-        FACTORY_ROOT_KEY_FILE: rootFile,
-        FACTORY_ROOT_KEY_VERSION: 'root-1',
-        FACTORY_INSTALLATION: 'server-test',
-        FACTORY_RING_DIRECTORY: join(directory, 'ring'),
-        FACTORY_RING_BACKUP_DIRECTORY: join(directory, 'backup'),
-      },
+  const server = spawn(process.execPath, ['.output/server/index.mjs'], {
+    windowsHide: true,
+    env: {
+      ...process.env,
+      HOST: '127.0.0.1',
+      PORT: '18300',
+      FACTORY_DATABASE_URL: f.config.url,
+      FACTORY_DATABASE_NAMESPACE: f.config.namespace,
+      FACTORY_DATABASE_NAME: f.config.database,
+      FACTORY_DATABASE_USER: f.config.username,
+      FACTORY_DATABASE_PASSWORD: f.config.password,
+      FACTORY_ORIGIN: 'http://localhost:18300',
+      FACTORY_OIDC_ISSUER: f.op.issuer,
+      FACTORY_OIDC_CLIENT_ID: 'factory',
+      FACTORY_OIDC_CLIENT_SECRET: 'fixture-secret',
+      FACTORY_ALLOW_LOOPBACK_HTTP: 'true',
+      FACTORY_TRUST_VERIFIED_EMAIL: 'true',
+      FACTORY_ROOT_KEY_FILE: rootFile,
+      FACTORY_ROOT_KEY_VERSION: 'root-1',
+      FACTORY_INSTALLATION: 'server-test',
+      FACTORY_RING_DIRECTORY: join(directory, 'ring'),
+      FACTORY_RING_BACKUP_DIRECTORY: join(directory, 'backup'),
     },
-  );
+  });
   let output = '';
   server.stdout.on('data', (b) => {
     output += b;

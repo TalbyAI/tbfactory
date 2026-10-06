@@ -15,6 +15,7 @@
     "acceptance": "tsx tests/acceptance.ts",
     "acceptance:reviews": "tsx tests/review-acceptance.ts",
     "acceptance:publications": "tsx tests/publication-acceptance.ts",
+    "acceptance:sharing": "tsx tests/sharing-acceptance.ts",
     "format": "npm run format:code && npm run format:markdown",
     "format:check": "npm run format:code:check && npm run format:markdown:check",
     "format:code": "biome format --write .",

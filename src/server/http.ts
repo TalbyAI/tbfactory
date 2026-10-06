@@ -5,6 +5,7 @@ import { type Authentication } from './auth';
 import { type OrganizationSecrets } from './secrets';
 import { ingestObservation } from './observations';
 import { type ReviewArtifacts } from './review-artifacts';
+import { readSharedArtifact } from './artifact-sharing';
 
 export type Services = {
   auth: Authentication;
@@ -70,6 +71,19 @@ function route(url: URL, method: string): Operation {
       return { ...base, resource: p[4], action: 'invitation.revoke' };
   }
   if (p[3] === 'work-items') {
+    if (p.length === 6 && p[5] === 'artifact-shares' && ['GET', 'POST'].includes(method))
+      return {
+        ...base,
+        resource: p[4],
+        action: method === 'GET' ? 'sharing.list' : 'sharing.create',
+      };
+    if (
+      p.length === 8 &&
+      p[5] === 'artifact-shares' &&
+      ['approve', 'revoke', 'revoke-approve'].includes(p[7]) &&
+      method === 'POST'
+    )
+      return { ...base, resource: p[4], request: p[6], action: `sharing.${p[7]}` };
     if (p.length === 6 && method === 'POST') {
       const publicationActions: Record<string, string> = {
         'review-publications': 'request',
@@ -150,6 +164,24 @@ export async function handleHttp(request: Request, services: Services): Promise<
     );
     if (!['GET', 'HEAD'].includes(request.method) && caller.human)
       browserMutation(request, services.origin);
+    const sharedRoute = /^\/api\/shared-reports\/([^/]+)$/.exec(url.pathname);
+    if (sharedRoute && request.method === 'GET') {
+      if (!services.artifacts) fail(503, 'Artifact storage unavailable');
+      const content = await readSharedArtifact(
+        services.factory.store,
+        services.artifacts,
+        caller,
+        sharedRoute[1],
+      );
+      return new Response(new Uint8Array(content), {
+        headers: {
+          'content-type': 'text/markdown; charset=utf-8',
+          'content-disposition': 'attachment; filename="confirmed-findings.md"',
+          'cache-control': 'no-store',
+          'x-content-type-options': 'nosniff',
+        },
+      });
+    }
     const artifactRoute =
       /^\/api\/organizations\/([^/]+)\/work-items\/([^/]+)\/reviews\/([^/]+)\/artifact$/.exec(
         url.pathname,

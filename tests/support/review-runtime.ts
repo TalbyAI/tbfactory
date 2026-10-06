@@ -11,10 +11,10 @@ import { ReviewArtifacts } from '../../src/server/review-artifacts';
 import { handleHttp } from '../../src/server/http';
 
 export async function reviewRuntime() {
-  const f = await fixture();
+  const directory = resolve('.runtime', `review-${randomUUID()}`);
+  const f = await fixture(join(directory, 'artifacts'));
   await f.bootstrap('alpha');
   await f.bootstrap('beta', ['alice', 'bob']);
-  const directory = resolve('.runtime', `review-${randomUUID()}`);
   await mkdir(directory, { recursive: true });
   const source = join(directory, 'source');
   await mkdir(source);

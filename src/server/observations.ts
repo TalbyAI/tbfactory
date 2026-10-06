@@ -4,6 +4,7 @@ import { digest, fail, identifier, stable, text } from './contracts';
 import { type Row, type Store, type Transaction } from './store';
 import { type OrganizationSecrets } from './secrets';
 import { definition, selection } from './work-item-types';
+import { initialPublicationMode, publicationModeSchema } from './publication-provider';
 
 const guid = z.guid().transform((value) => value.toLowerCase());
 const positive = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
@@ -35,6 +36,7 @@ const sourceSchema = z.strictObject({
   type: z.literal('pull-request-review'),
   external: externalSchema,
   enabled: z.boolean(),
+  publicationMode: publicationModeSchema.optional(),
   secret: z
     .string()
     .min(32)
@@ -48,6 +50,7 @@ type Source = {
   project: string;
   repository: string;
   type: string;
+  publicationMode?: string;
   external: External;
 };
 const sourceId = (organization: string, source: string) => digest(stable([organization, source]));
@@ -265,6 +268,7 @@ export async function ingestObservation(
   request: Request,
   organization: string,
   sourceName: string,
+  publicationMode?: unknown,
 ) {
   identifier.parse(organization);
   identifier.parse(sourceName);
@@ -326,6 +330,15 @@ export async function ingestObservation(
         type: source.type,
         title: observation.title,
         version: selected.version,
+        publicationMode: await initialPublicationMode(
+          tx,
+          organization,
+          source.repository,
+          selected.version,
+          publicationMode === undefined
+            ? source.publicationMode
+            : publicationModeSchema.parse(publicationMode),
+        ),
         state: 'registered',
         actor: `source:${record.id}`,
         createdAt: recordedAt,
@@ -335,7 +348,13 @@ export async function ingestObservation(
         organization,
         workItem: item.id,
         kind: 'work-item.created',
-        payload: { title: item.title, type: item.type, version: item.version, state: 'registered' },
+        payload: {
+          title: item.title,
+          type: item.type,
+          version: item.version,
+          state: 'registered',
+          publicationMode: item.publicationMode,
+        },
         actor: `source:${record.id}`,
         recordedAt,
       });

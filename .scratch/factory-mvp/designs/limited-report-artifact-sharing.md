@@ -2,9 +2,9 @@
 
 Issue: [08](../issues/08-limited-report-artifact-sharing.md).
 
-Status: proposal awaiting the issue's human checkpoint. None of the choices below
-is an accepted decision yet. Issue 07 is closed; its publication and recovery
-contract remains the starting point. This proposal preserves ADRs 0003, 0004,
+Status: accepted by the User on 2026-10-06. The contract below is approved for
+implementation. Issue 07 is closed; its publication and recovery
+contract remains the starting point. This design preserves ADRs 0003, 0004,
 0007, 0008 and 0009 and uses the existing domain language.
 
 ## Access approaches
@@ -21,7 +21,7 @@ contract remains the starting point. This proposal preserves ADRs 0003, 0004,
    Organization Membership. This supports outside collaborators, but adds a new
    identity/access boundary and onboarding contract beyond the current MVP.
 
-The following contract proposes approach 1. External publication means placing a
+The accepted contract selects approach 1. External publication means placing a
 reference in a provider comment; it does not imply anonymous content access.
 
 ## Content and reference versions
@@ -94,7 +94,7 @@ using the retained exact comment content and attempt marker.
 
 ## Access limits, expiry and revocation
 
-Proposed limits: one to 50 named User recipients, all with current Membership in
+Accepted limits: one to 50 named User recipients, all with current Membership in
 the owning Organization. A recipient must also retain `artifact.shared-read`
 permission at the Work Item's scope. Reading the publication version does not
 require `artifact.read`, `work-item.read` or `history.read` and grants none of
@@ -102,7 +102,7 @@ those permissions. A URL alone never authorizes access. Users belonging to other
 Organizations only, anonymous callers and API Credentials cannot read shared
 content in this increment.
 
-Proposed expiry: seven days by default, explicitly selectable up to 30 days from
+Accepted expiry: seven days by default, explicitly selectable up to 30 days from
 share creation; no nonexpiring references in this increment. Deny a read when
 server time is at or beyond expiry. Enforce expiry on every read without relying
 on a cleanup job, including after web/database restart.
@@ -125,7 +125,7 @@ existing private authorization checks.
 
 ## Retention and restart
 
-Proposed retention: keep private and publication Artifact content, metadata,
+Accepted retention: keep private and publication Artifact content, metadata,
 references, restrictions, revocations and immutable Facts indefinitely on the
 accepted database/file-volume storage. Expiry and revocation withdraw access;
 they do not delete evidence. Automated deletion and a configurable retention
@@ -168,8 +168,7 @@ and independent Standards/Spec code review before the implementation commit.
 
 ## Human checkpoint
 
-Pending User approval or correction of the proposed content/reference versioning,
-provider destinations, recipient/access limits, expiry, revocation and retention.
-Dependent application implementation must wait for that agreement. Record the
-User's answer in the issue and distinguish accepted decisions from any remaining
-questions before proceeding.
+The User approved this document as implementation decisions on 2026-10-06,
+including content/reference versioning, provider destinations, recipient/access
+limits, expiry, revocation and retention. The approval is recorded in Issue 08.
+No human checkpoint question remains open for this increment.

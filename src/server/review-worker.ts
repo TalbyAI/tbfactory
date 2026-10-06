@@ -63,6 +63,7 @@ export class ReviewWorker {
       this.owner,
       settings.allowedHosts,
       settings.allowLoopback,
+      this.artifacts,
     );
     const schema = z.object({ run: z.string() });
     const intake = createStep({
