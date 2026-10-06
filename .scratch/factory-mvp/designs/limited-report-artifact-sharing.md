@@ -54,8 +54,9 @@ confirmed-content comments. Record the selected mode in initial Work Item
 configuration at creation/import, allowing an explicit initial override. The
 Workflow uses that retained Work Item selection, not a later change to the
 Repository default. A reference mode requires a type supporting sharing; reject
-incompatible creation/import configuration. Existing Work Items without a mode
-retain confirmed-content comments. The Repository still fixes the authorized
+incompatible creation/import configuration. Existing version-4 Work Items without
+a mode retain confirmed-content comments; versions 1–3 keep their existing
+no-publication behavior pending explicit migration. The Repository still fixes the authorized
 provider destination and credential, never a client-supplied destination URL.
 
 Add Work Item Type version 5 declaring
