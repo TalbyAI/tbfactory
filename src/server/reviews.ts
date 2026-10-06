@@ -45,7 +45,7 @@ export const reviewDecisionSchema = z.strictObject({
   replaces: identifier.optional(),
 });
 export type RunData = {
-  workflow: 'review-intake-v1' | 'review-v1';
+  workflow: 'review-intake-v1' | 'review-v1' | 'review-finalization-v1';
   status: string;
   token: string;
   identity: { kind: 'user' | 'service'; user: string; credential?: string; activities?: string[] };
@@ -65,6 +65,17 @@ export type RunData = {
   report?: string;
   decision?: string;
   handoff?: string;
+  finalization?: {
+    request: string;
+    reviewRun: string;
+    report: string;
+    decision: string;
+    publication: string | null;
+    publicationStatus: string | null;
+    state: string;
+    transitionSequence: number;
+    typeVersion: number;
+  };
   publication?: string;
   error?: string;
   sandbox?: Record<string, any>;

@@ -180,9 +180,11 @@ export function TransitionBoard({
                           setMessage(
                             result.completed
                               ? 'State Transition completed.'
-                              : result.workflowRun
-                                ? 'Review Intake Workflow accepted. Factory state is unchanged.'
-                                : 'Transition Request accepted; awaiting Approval. Factory state is unchanged.',
+                              : result.workflowRun?.workflow === 'review-finalization-v1'
+                                ? 'Review Finalization Workflow accepted. Factory state is unchanged.'
+                                : result.workflowRun
+                                  ? 'Review Intake Workflow accepted. Factory state is unchanged.'
+                                  : 'Transition Request accepted; awaiting Approval. Factory state is unchanged.',
                           );
                           await openItem(result.workItem);
                         });
@@ -206,6 +208,13 @@ export function TransitionBoard({
                                   required
                                   readOnly
                                   value={item.readinessFact ?? ''}
+                                />
+                              ) : name === 'reportVersion' ? (
+                                <input
+                                  name={name}
+                                  required
+                                  readOnly
+                                  value={transition.currentReportVersion ?? ''}
                                 />
                               ) : (
                                 <textarea name={name} required maxLength={10000} />

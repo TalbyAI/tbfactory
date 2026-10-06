@@ -1,13 +1,25 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { digest, fail, identifier, stable } from './contracts';
+import { fail, identifier, stable } from './contracts';
 import { authorization, authorized, type Scope } from './authorization';
 import { page } from './factory';
-import { itemDefinition, supportsReview, transitionIds, transitionInputs } from './work-item-types';
+import {
+  itemDefinition,
+  supportsFinalization,
+  supportsReview,
+  transitionIds,
+  transitionInputs,
+} from './work-item-types';
 import { type Caller } from './auth';
 import { type Factory, type Operation } from './factory';
 import { type Row, type Transaction } from './store';
 import { acceptIntake } from './reviews';
+import {
+  acceptReviewFinalization,
+  finalizationAvailability,
+  finalizationEvidence,
+  transitionApprovalBinding,
+} from './review-finalization';
 
 export const transitionRequestSchema = z
   .strictObject({
@@ -36,12 +48,19 @@ export async function boardItem(tx: Transaction, caller: Caller, item: Row) {
   const current = facts.find((fact) => (fact.payload as any).sequence === item.transitionSequence);
   const transitions = [];
   for (const transition of itemDefinition(item).transitions.filter((t) => t.from === item.state)) {
+    const finalization =
+      transition.id === 'finalize-review' ? await finalizationAvailability(tx, item) : undefined;
     let reason: string | null = item.activeRun
       ? 'Active Workflow Run'
       : transition.handling === 'workflow' &&
-          !(supportsReview(item.version) && transition.id === 'request-review')
+          !(
+            (supportsReview(item.version) && transition.id === 'request-review') ||
+            (supportsFinalization(item.version) && transition.id === 'finalize-review')
+          )
         ? 'Workflow not installed'
-        : null;
+        : finalization && !finalization.reportVersion
+          ? (finalization.reason ?? 'Current report version required')
+          : null;
     let requiresApproval = false;
     try {
       requiresApproval = (await authorization(tx, caller, `transition.${transition.id}`, scope))
@@ -52,7 +71,13 @@ export async function boardItem(tx: Transaction, caller: Caller, item: Row) {
     }
     if (!reason && transition.inputs.some((name) => name.endsWith('Fact')) && !current)
       reason = 'Confirmed prerequisite Fact required';
-    transitions.push({ ...transition, available: !reason, reason, requiresApproval });
+    transitions.push({
+      ...transition,
+      ...(finalization?.reportVersion ? { currentReportVersion: finalization.reportVersion } : {}),
+      available: !reason,
+      reason,
+      requiresApproval,
+    });
   }
   return {
     ...item,
@@ -61,21 +86,6 @@ export async function boardItem(tx: Transaction, caller: Caller, item: Row) {
     transitions,
   };
 }
-const approvalBinding = (request: Row) =>
-  digest(
-    stable({
-      workItem: request.workItem,
-      organization: request.organization,
-      user: request.user,
-      credential: request.credential,
-      transition: request.transition,
-      expectedState: request.expectedState,
-      version: request.version,
-      sequence: request.sequence,
-      inputs: request.inputs,
-    }),
-  );
-
 async function validateRequest(tx: Transaction, item: Row, request: Row) {
   const transition = itemDefinition(item).transitions.find(
     (t) => t.id === request.transition && t.from === item.state,
@@ -91,9 +101,21 @@ async function validateRequest(tx: Transaction, item: Row, request: Row) {
   if (item.activeRun) fail(409, 'An active Workflow Run owns this Work Item');
   if (
     transition.handling === 'workflow' &&
-    !(supportsReview(item.version) && transition.id === 'request-review')
+    !(
+      (supportsReview(item.version) && transition.id === 'request-review') ||
+      (supportsFinalization(item.version) && transition.id === 'finalize-review')
+    )
   )
     fail(409, 'Workflow not installed');
+  if (transition.id === 'finalize-review') {
+    const evidence = await finalizationEvidence(
+      tx,
+      item,
+      String((request.inputs as any).reportVersion),
+    );
+    if (stable(request.finalizationEvidence) !== stable(evidence))
+      fail(409, 'Finalization evidence changed; request a new Approval');
+  }
   const inputs = request.inputs as Record<string, string>;
   const prerequisite = inputs.readinessFact ?? inputs.finalizationFact;
   if (prerequisite) {
@@ -127,6 +149,10 @@ async function complete(
 ) {
   const transition = await validateRequest(tx, item, request);
   if (transition.handling === 'workflow') {
+    if (transition.id === 'finalize-review') {
+      const result = await acceptReviewFinalization(factory, tx, caller, item, request);
+      return { accepted: true, completed: false, ...result };
+    }
     const result = await acceptIntake(
       factory,
       tx,
@@ -202,7 +228,7 @@ export async function transitionOperation(
         const fact = await factory.fact(tx, caller, item, 'activity.approved', {
           request: request.id,
           activity: `transition.${request.transition}`,
-          binding: approvalBinding(request),
+          binding: transitionApprovalBinding(request),
           inputs: request.inputs,
           version: request.version,
           executionIdentity: {
@@ -211,7 +237,11 @@ export async function transitionOperation(
             organization: request.organization,
           },
         });
-        const approval = { fact: fact.id, actor: caller.user, binding: approvalBinding(request) };
+        const approval = {
+          fact: fact.id,
+          actor: caller.user,
+          binding: transitionApprovalBinding(request),
+        };
         return {
           request: await tx.put('transition_request', { ...request, status: 'approved', approval }),
           fact,
@@ -232,7 +262,7 @@ export async function transitionOperation(
       if (
         request.status !== 'approved' ||
         !approval ||
-        approval.binding !== approvalBinding(request)
+        approval.binding !== transitionApprovalBinding(request)
       )
         fail(409, 'Activity-bound Approval required');
       // The permission check above is inside the same transaction as the state write.
@@ -252,7 +282,17 @@ export async function transitionOperation(
       version: input.version,
       sequence: item.transitionSequence ?? 0,
       inputs: input.inputs,
+      ...(input.transition === 'finalize-review'
+        ? {
+            finalizationEvidence: await finalizationEvidence(
+              tx,
+              item,
+              String(input.inputs.reportVersion),
+            ),
+          }
+        : {}),
       status: permission.requiresHuman ? 'pending-approval' : 'accepted',
+      activities: caller.activities,
       createdAt: Date.now(),
     };
     await validateRequest(tx, item, request);

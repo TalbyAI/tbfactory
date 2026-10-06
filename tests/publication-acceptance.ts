@@ -324,7 +324,97 @@ try {
     'not-published',
   );
   assert.equal(f.posts.length, 2);
-  if (process.argv.includes('--hold')) {
+  if (process.argv.includes('--hold-finalization')) {
+    await f.r.stopWorker();
+    const current = currentPublication(await f.view());
+    const resolved = await browser.json(origin, `${f.path}/publication-confirmation`, {
+      operationId: 'built-finalization-publication-confirmation',
+      run: f.run.id,
+      publication: current.id,
+      evidence,
+      resolution: 'completed',
+      reason: 'Verified the persisted provider comment after restart',
+      confirmedStopped: true,
+    });
+    assert.equal(resolved.status, 200);
+    assert.equal(resolved.body.publication.status, 'completed');
+    const prepared = await browser.json(origin, `${f.path}/transition-requests`, {
+      operationId: 'built-finalization-prepare-review',
+      transition: 'prepare-review',
+      expectedState: 'registered',
+      version: 4,
+      inputs: { reviewBrief: 'Prepare the verified report for Factory finalization' },
+    });
+    assert.equal(prepared.status, 200);
+    assert.equal(prepared.body.workItem.state, 'ready-for-review');
+    const item = await browser.json(origin, f.path);
+    assert.equal(item.body.activeRun, undefined);
+    const board = await browser.json(
+      origin,
+      '/api/organizations/alpha/board?type=pull-request-review',
+    );
+    const action = board.body.items
+      .find((candidate: any) => candidate.id === f.path.split('/').at(-1))
+      .transitions.find((transition: any) => transition.id === 'finalize-review');
+    assert.equal(action.available, true, JSON.stringify(action));
+    assert.equal(action.currentReportVersion, f.report.id);
+    const finalizationEvidence = {
+      ready: true,
+      stage: 'finalization',
+      origin,
+      path: f.path,
+      report: f.report.id,
+      decision: currentPublication(await f.view()).decision,
+      publication: resolved.body.publication.id,
+      transition: action,
+      directory: f.r.directory,
+    };
+    const evidenceFile = join(f.r.directory, 'finalization-acceptance.json');
+    await writeFile(evidenceFile, JSON.stringify(finalizationEvidence, null, 2));
+    console.log(JSON.stringify({ ...finalizationEvidence, evidenceFile }));
+    process.stdin.resume();
+    await new Promise<void>((resolve) => {
+      let buffered = '';
+      let resuming = false;
+      const finish = () => {
+        process.stdin.off('data', onData);
+        process.stdin.pause();
+        resolve();
+      };
+      const onData = (chunk: Buffer | string) => {
+        buffered += chunk.toString();
+        const lines = buffered.split(/\r?\n/);
+        buffered = lines.pop() ?? '';
+        for (const line of lines.map((entry) => entry.trim())) {
+          if (line === 'stop') finish();
+          if (line === 'resume-worker' && !resuming) {
+            resuming = true;
+            void f.r
+              .startWorker()
+              .then(async () => {
+                const reviews = await browser.json(origin, `${f.path}/reviews`);
+                const run = reviews.body.runs.find(
+                  (candidate: any) => candidate.workflow === 'review-finalization-v1',
+                );
+                console.log(JSON.stringify({ resumed: true, run: run?.id, status: run?.status }));
+              })
+              .catch((error) =>
+                console.log(JSON.stringify({ resumed: false, error: (error as Error).message })),
+              )
+              .finally(() => {
+                resuming = false;
+              });
+          }
+        }
+      };
+      process.once('SIGINT', finish);
+      process.once('SIGTERM', finish);
+      process.on('message', (message) => {
+        if (message === 'stop') finish();
+      });
+      process.stdin.on('data', onData);
+    });
+  } else if (process.argv.includes('--hold')) {
     console.log(
       JSON.stringify({
         ready: true,

@@ -55,8 +55,9 @@ export function ReviewPanel({
   const active = view.runs.find(
     (r: any) => !['completed', 'rejected', 'cancelled', 'superseded', 'stopped'].includes(r.status),
   );
-  const cancellations = view.runs
-    .filter((run: any) => run.cancellation)
+  const cancellations = view.runs.filter((run: any) => run.cancellation);
+  const finalizations = view.runs
+    .filter((run: any) => run.workflow === 'review-finalization-v1')
     .sort((a: any, b: any) => Number(b.createdAt) - Number(a.createdAt));
   return (
     <section className="review-panel" aria-label={`Private review ${item.title}`}>
@@ -103,6 +104,25 @@ export function ReviewPanel({
               </p>
             );
           })}
+        </section>
+      )}
+      {finalizations.length > 0 && (
+        <section aria-label="Review Finalization Workflow progress">
+          <h5>Review Finalization Workflow</h5>
+          {finalizations.map((run: any) => (
+            <details key={run.id} open={run.id === finalizations[0]?.id}>
+              <summary>
+                Finalization execution: <strong>{run.status}</strong> · {run.id.slice(0, 12)}
+              </summary>
+              <p>Review report: {run.finalization?.report ?? run.report ?? 'Pending'}</p>
+              <p>Review Decision: {run.finalization?.decision ?? run.decision ?? 'Pending'}</p>
+              <p>
+                Publication outcome: {run.finalization?.publicationStatus ?? 'Pending'} ·{' '}
+                {run.finalization?.publication ?? run.publication ?? 'No confirmed outcome'}
+              </p>
+              {run.error && <p role="status">{run.error}</p>}
+            </details>
+          ))}
         </section>
       )}
       {view.notifications

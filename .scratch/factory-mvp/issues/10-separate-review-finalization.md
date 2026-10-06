@@ -1,6 +1,8 @@
 # Finalize a Work Item through the Review Finalization Workflow
 
 Status: ready-for-agent
+Assignee: Codex
+State: open
 Type: AFK
 User stories covered: 13, 17, 18, 34, 35, 39
 
@@ -24,3 +26,7 @@ Handle an authorized Transition Request by starting the distinct Review Finaliza
 ## Blocked by
 
 - [Issue 07: Publish confirmed Findings and reconcile uncertain outcomes](07-confirmed-publication-and-reconciliation.md)
+
+## Comments
+
+Implementation evidence is recorded in [the finalization design contract](../designs/separate-review-finalization.md) and [the public-flow finalization tests](../../../tests/finalization.test.ts). Focused HTTP/Worker scenarios cover independent finalization, retained publication prerequisites, same-report Approval binding, authorization rechecks and restart, cancellation ownership, safe nonpublication, recovery, and atomic persistence failure. `npm run format:check`, `npm run typecheck`, and `npm run build` pass. Root's built UI/browser verification is still pending; keep this issue open until that check is recorded.

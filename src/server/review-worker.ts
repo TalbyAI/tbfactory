@@ -29,6 +29,7 @@ import {
 import { transitionOperation } from './transitions';
 import { PublicationWorker } from './publication-worker';
 import { supportsReview } from './work-item-types';
+import { finalizationAuthorizationReady, reviewFinalizationWorkflow } from './review-finalization';
 
 export type WorkerSettings = {
   directory: string;
@@ -39,6 +40,43 @@ export type WorkerSettings = {
   concurrency: number;
   limits: z.infer<typeof limitsSchema>;
 };
+
+async function terminalizeFinalizationRequest(
+  tx: Transaction,
+  run: Run,
+  cancellationRequest: string,
+) {
+  if (run.data.workflow !== 'review-finalization-v1') return;
+  const requestId = run.data.finalization?.request;
+  const request = requestId ? await tx.get('transition_request', requestId) : undefined;
+  if (
+    !request ||
+    request.organization !== run.organization ||
+    request.workItem !== run.workItem ||
+    request.transition !== 'finalize-review' ||
+    request.workflowRun !== run.id
+  )
+    fail(409, 'Finalization Transition Request ownership lost during cancellation');
+  if (request.status === 'cancelled') return;
+  if (request.status !== 'running')
+    fail(409, 'Finalization Transition Request is not running during cancellation');
+  await tx.put('transition_request', {
+    ...request,
+    status: 'cancelled',
+    error: 'Workflow Run cancellation confirmed',
+    result: { workflowRun: run.id, cancellationRequest },
+  });
+}
+
+function finalizationWorkflowFailure(result: unknown) {
+  const steps =
+    result && typeof result === 'object' && 'steps' in result && result.steps
+      ? Object.entries(result.steps)
+      : [];
+  const failedStep = steps.find(([, step]) => (step as any)?.status === 'failed')?.[0];
+  return `Finalization Workflow step ${failedStep ?? 'finalize-review'} failed`;
+}
+
 export class ReviewWorker {
   private storage!: LibSQLStore;
   private readonly workflows: Record<string, ReturnType<typeof createWorkflow>>;
@@ -150,6 +188,7 @@ export class ReviewWorker {
         .then(generate)
         .then(human)
         .commit(),
+      'review-finalization-v1': reviewFinalizationWorkflow(this.store, this.owner),
     };
   }
   private async completeReview(id: string) {
@@ -315,12 +354,13 @@ export class ReviewWorker {
         ) {
           if (run.data.report) {
             try {
+              const sourceRun = run.data.finalization?.reviewRun ?? run.id;
               const report = await this.store.transaction((tx) =>
                 tx.get('review_report', run.data.report!),
               );
               if (
                 !report ||
-                report.run !== run.id ||
+                report.run !== sourceRun ||
                 report.organization !== run.organization ||
                 report.workItem !== run.workItem
               )
@@ -448,6 +488,7 @@ export class ReviewWorker {
           error: undefined,
         },
       });
+      await terminalizeFinalizationRequest(tx, current, cancellation.request);
       await tx.put('work_item', { ...item, activeRun: undefined });
       const factId = digest(`workflow-cancellation-confirmed:${id}:${cancellation.request}`);
       if (!(await tx.get('fact', factId)))
@@ -958,28 +999,32 @@ export class ReviewWorker {
         if (missing.length) continue;
       }
       if (run.data.status === 'waiting-authorization') {
-        const ready = await this.store.transaction(async (tx) => {
-          const item = await tx.get('work_item', run.workItem);
-          if (!item) return false;
-          try {
-            const caller = await executionCaller(tx, run);
-            const transition = await authorization(
-              tx,
-              caller,
-              'transition.request-review',
-              scopeOf(item),
-            );
-            const generation = await authorization(tx, caller, 'review.generate', scopeOf(item));
-            return !(
-              (transition.requiresHuman && !run.data.requestApproval) ||
-              (generation.requiresHuman && !generationApproved(run))
-            );
-          } catch (error: any) {
-            if ([403, 404].includes(error.status)) return false;
-            throw error;
-          }
-        });
-        if (!ready) continue;
+        if (run.data.workflow === 'review-finalization-v1') {
+          if (!(await finalizationAuthorizationReady(this.store, run, this.owner))) continue;
+        } else {
+          const ready = await this.store.transaction(async (tx) => {
+            const item = await tx.get('work_item', run.workItem);
+            if (!item) return false;
+            try {
+              const caller = await executionCaller(tx, run);
+              const transition = await authorization(
+                tx,
+                caller,
+                'transition.request-review',
+                scopeOf(item),
+              );
+              const generation = await authorization(tx, caller, 'review.generate', scopeOf(item));
+              return !(
+                (transition.requiresHuman && !run.data.requestApproval) ||
+                (generation.requiresHuman && !generationApproved(run))
+              );
+            } catch (error: any) {
+              if ([403, 404].includes(error.status)) return false;
+              throw error;
+            }
+          });
+          if (!ready) continue;
+        }
       }
       const task = this.execute(run)
         .catch(async (error) => {
@@ -1042,9 +1087,20 @@ export class ReviewWorker {
       const result = await runtime.resume({ step: 'human-review', resumeData: { reviewed: true } });
       if (result.status === 'failed')
         throw Error('Review continuation requires authorization recheck');
+    } else if (snapshot?.status === 'suspended' && run.data.workflow === 'review-finalization-v1') {
+      const result = await runtime.resume({
+        step: 'finalize-review',
+        resumeData: { recheck: true },
+      });
+      if (result.status === 'failed') throw Error(finalizationWorkflowFailure(result));
     } else {
       const result = await runtime.start({ inputData: { run: run.id } });
-      if (result.status === 'failed') throw Error('Workflow failed; inspect execution evidence');
+      if (result.status === 'failed')
+        throw Error(
+          run.data.workflow === 'review-finalization-v1'
+            ? finalizationWorkflowFailure(result)
+            : 'Workflow failed; inspect execution evidence',
+        );
     }
   }
   async close() {
@@ -1115,15 +1171,16 @@ export async function recoverStoppedRun(
   if (!run || !['recovery-required', 'running'].includes(run.data.status))
     throw Error('Run does not require stopped-execution recovery');
   await confirmSandboxStopped(run);
-  if (!['review-intake-v1', 'review-v1'].includes(run.data.workflow))
+  if (!['review-intake-v1', 'review-v1', 'review-finalization-v1'].includes(run.data.workflow))
     throw Error('Retained Workflow definition unavailable');
   if (run.data.report) {
     if (!artifactDirectory)
       throw Error('Artifact directory required to reconcile completed report');
     const report = await store.transaction((tx) => tx.get('review_report', run.data.report!));
+    const sourceRun = run.data.finalization?.reviewRun ?? run.id;
     if (
       !report ||
-      report.run !== run.id ||
+      report.run !== sourceRun ||
       report.organization !== run.organization ||
       report.workItem !== run.workItem
     )
@@ -1181,6 +1238,8 @@ export async function recoverStoppedRun(
         : {}),
     };
     await tx.put('workflow_run', { ...current, data });
+    if (cancellationPending)
+      await terminalizeFinalizationRequest(tx, current, data.cancellation!.request);
     const item = await tx.get('work_item', current.workItem);
     if (item && (item.activeRun as any)?.id === id)
       await tx.put('work_item', {

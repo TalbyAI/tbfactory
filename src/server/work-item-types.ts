@@ -75,6 +75,7 @@ export const transitionDefinitions = flow.map((transition) => ({
   approvalPoint: `transition.${transition.id}`,
 }));
 export const supportsReview = (version: unknown) => version === 3 || version === 4 || version === 5;
+export const supportsFinalization = (version: unknown) => version === 4 || version === 5;
 export function definition(type: unknown, version: unknown) {
   if (type !== 'pull-request-review' || ![1, 2, 3, 4, 5].includes(Number(version)))
     fail(409, 'Retained Work Item Type unavailable');
