@@ -30,6 +30,14 @@ Deliver a runnable shared server/container installation with separate TanStack S
 
 ## Comments
 
+### 2026-10-06 — Approved local installation scope
+
+The User selected a locally verifiable installation with a configurable recovery
+destination, leaving real deployment pending. Verify the complete recovery bundle
+and local restore procedure. A same-host verification destination does not establish
+independent disaster recovery. The production recovery destination and measured
+installation-specific recovery-time objective remain required before real deployment.
+
 ### 2026-10-04 — Provider ingestion runtime verification
 
 Extend Issue 04's built-web/database/ring recovery drill to real running and suspended
