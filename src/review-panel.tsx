@@ -7,7 +7,7 @@ export function ReviewPanel({
   onChange,
 }: {
   organization: string;
-  item: { id: string; title: string; version: number };
+  item: { id: string; title: string; version: number; publicationMode?: string };
   onChange: () => Promise<void>;
 }) {
   const path = `/api/organizations/${organization}/work-items/${item.id}`;
@@ -15,13 +15,19 @@ export function ReviewPanel({
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false);
   const operations = useRef(new Map<string, string>());
+  const [shares, setShares] = useState<any[]>([]);
   async function refresh() {
     const result = await uiRead({ data: { path: `${path}/reviews` } });
     if (result.status === 200) setView(result.data);
     else if (result.status !== 403) setError(result.data.error);
+    if (item.version === 5) {
+      const sharing = await uiRead({ data: { path: `${path}/artifact-shares` } });
+      setShares(sharing.status === 200 ? sharing.data.shares : []);
+    }
   }
   useEffect(() => {
     setView(null);
+    setShares([]);
     void refresh();
   }, [organization, item.id]);
   async function write(endpoint: string, body: Record<string, unknown>) {
@@ -121,6 +127,9 @@ export function ReviewPanel({
         const decision = view.decisions.find((d: any) => d.id === run?.decision);
         const current = view.reportStatus.find((s: any) => s.report === report.id)?.current;
         const publication = view.publications.find((p: any) => p.id === run?.publication);
+        const emptyConfirmed = !decision?.payload.findings.some(
+          (finding: any) => finding.decision === 'confirmed',
+        );
         const canReview =
           (!run?.publication || publication?.correctionAllowed) &&
           current &&
@@ -174,7 +183,8 @@ export function ReviewPanel({
               </p>
             )}
             <a href={`${path}/reviews/${report.id}/artifact`}>Download private Markdown report</a>
-            {item.version === 4 &&
+            {(item.version === 4 || item.version === 5) &&
+              (item.publicationMode !== 'report-reference' || emptyConfirmed) &&
               decision?.usable &&
               run?.status === 'completed' &&
               !active &&
@@ -186,9 +196,28 @@ export function ReviewPanel({
                     void write('review-publications', { run: run.id, decision: decision.id })
                   }
                 >
-                  Request publication of confirmed Findings
+                  {emptyConfirmed
+                    ? 'Record skipped publication: no confirmed Findings'
+                    : 'Request publication of confirmed Findings'}
                 </button>
               )}
+            {item.version === 5 && (
+              <SharingPanel
+                shares={shares.filter((s) => s.report === report.id)}
+                run={run}
+                decision={decision}
+                referenceMode={item.publicationMode === 'report-reference'}
+                canPublish={
+                  !!decision?.usable &&
+                  run?.status === 'completed' &&
+                  !active &&
+                  (!run.publication ||
+                    (publication?.correctionAllowed && publication.decision !== decision.id))
+                }
+                busy={busy}
+                write={write}
+              />
+            )}
             {(view.publications ?? [])
               .filter((p: any) => p.run === report.run)
               .map((p: any) => (
@@ -249,6 +278,127 @@ export function ReviewPanel({
           </details>
         );
       })}
+    </section>
+  );
+}
+
+function SharingPanel({
+  shares,
+  run,
+  decision,
+  referenceMode,
+  canPublish,
+  busy,
+  write,
+}: {
+  shares: any[];
+  run: any;
+  decision: any;
+  referenceMode: boolean;
+  canPublish: boolean;
+  busy: boolean;
+  write: (endpoint: string, body: Record<string, unknown>) => Promise<void>;
+}) {
+  return (
+    <section aria-label="Limited report Artifact sharing">
+      <h5>Limited report Artifact sharing</h5>
+      {decision?.usable && (
+        <form
+          aria-label="Share confirmed Findings"
+          onSubmit={(event: FormEvent<HTMLFormElement>) => {
+            event.preventDefault();
+            const data = new FormData(event.currentTarget);
+            const recipients = String(data.get('recipients'))
+              .split(',')
+              .map((id) => id.trim())
+              .filter(Boolean);
+            const days = Number(data.get('days'));
+            void write('artifact-shares', {
+              run: run.id,
+              decision: decision.id,
+              recipients,
+              expiresInDays: days,
+            });
+          }}
+        >
+          <fieldset disabled={busy}>
+            <label>
+              Recipient User IDs (one to 50, comma separated)
+              <textarea name="recipients" required maxLength={6500} />
+            </label>
+            <label>
+              Expiry in days
+              <input name="days" type="number" min="1" max="30" defaultValue="7" required />
+            </label>
+            <p>
+              Named Users need current Organization Membership and sharing-read permission. Sharing
+              requires separate authorization and may require Approval.
+            </p>
+            <button>Create restricted report reference</button>
+          </fieldset>
+        </form>
+      )}
+      {shares.map((share) => (
+        <div key={share.id}>
+          <p>
+            Reference: {share.id} · {share.status}
+          </p>
+          <p>Content version: {share.contentVersion}</p>
+          <p>Recipients: {share.recipients.join(', ')}</p>
+          <p>Expires: {new Date(share.expiresAt).toISOString()}</p>
+          <a href={share.url}>Download shared confirmed Findings</a>
+          {share.status === 'waiting-approval' && (
+            <button
+              disabled={busy}
+              onClick={() => void write(`artifact-shares/${share.id}/approve`, {})}
+            >
+              Approve this sharing operation
+            </button>
+          )}
+          {referenceMode &&
+            canPublish &&
+            share.status === 'active' &&
+            share.decision === decision.id && (
+              <button
+                disabled={busy}
+                onClick={() =>
+                  void write('review-publications', {
+                    run: run.id,
+                    decision: decision.id,
+                    reference: share.id,
+                  })
+                }
+              >
+                Publish this report reference
+              </button>
+            )}
+          {share.status !== 'revoked' && (
+            <button
+              disabled={busy}
+              onClick={() => void write(`artifact-shares/${share.id}/revoke`, {})}
+            >
+              Revoke this reference permanently
+            </button>
+          )}
+          {share.revocation && share.status !== 'revoked' && (
+            <button
+              disabled={busy}
+              onClick={() =>
+                void write(`artifact-shares/${share.id}/revoke-approve`, {
+                  request: share.revocation.request,
+                })
+              }
+            >
+              Approve this revocation
+            </button>
+          )}
+          {share.publications.map((p: any) => (
+            <p key={p.id}>
+              Provider Activity: {p.status} · Attempt {p.attempt}
+            </p>
+          ))}
+        </div>
+      ))}
     </section>
   );
 }

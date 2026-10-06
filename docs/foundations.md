@@ -177,6 +177,16 @@ later queries. Manual Work Items without provider correspondence cannot publish;
 explicit authorized binding is a deferred follow-up, and ingestion does not bind
 an existing manual Work Item.
 
+The User approved [limited report Artifact sharing](../.scratch/factory-mvp/designs/limited-report-artifact-sharing.md)
+on 2026-10-06. Work Item Type version 5 adds separate sharing and revocation
+Approval Points. New Work Items retain an initial confirmed-content or restricted
+report-reference publication mode. References bind immutable confirmed-only
+content, one to 50 named Users in the same Organization and an expiry of seven
+days by default, capped at 30 days. Reads require current Membership and scoped
+sharing-read permission; permanent authorized revocation and expiry withdraw
+access without deleting indefinitely retained evidence. Versions 1–4 and existing
+publication recovery rules remain available unchanged.
+
 ## Planned Mastra–SurrealDB adapter prototype
 
 The bounded investigation is complete. Its [resolution and evidence](../.scratch/factory-mvp/issues/01-validate-durable-workflow-storage.md#comments) own the provider decision and dependency pins. The original accepted evaluation plan below remains the scope of that investigation; the purpose is storage feasibility rather than building the Factory.

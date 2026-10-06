@@ -5,6 +5,22 @@ import { type Row, type Store, type Transaction } from './store';
 import { type OrganizationSecrets } from './secrets';
 import { validateEndpoint } from './review-configuration';
 
+export const publicationModeSchema = z.enum(['confirmed-content', 'report-reference']);
+export async function initialPublicationMode(
+  tx: Transaction,
+  organization: string,
+  repository: string | undefined,
+  version: unknown,
+  override?: string,
+) {
+  const configuration =
+    repository &&
+    ((await tx.get('publication_config', configurationId(organization, repository)))?.data as any);
+  const mode = override ?? configuration?.defaultMode ?? 'confirmed-content';
+  if (mode === 'report-reference' && version !== 5)
+    fail(422, 'Report references require Work Item Type version 5');
+  return mode;
+}
 const configurationSchema = z.strictObject({
   organization: identifier,
   repository: identifier,
@@ -17,10 +33,19 @@ const configurationSchema = z.strictObject({
     .regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/)
     .optional(),
   key: text.optional(),
+  defaultMode: publicationModeSchema.default('confirmed-content'),
 });
 export const configurationId = (organization: string, repository: string) =>
   digest(stable([organization, repository]));
 export const publicationPurpose = (credential: string) => `publication:${credential}`;
+function configurationBinding(data: Record<string, any>) {
+  const { version: _version, destinationVersion: _destinationVersion, ...binding } = data;
+  return { ...binding, defaultMode: data.defaultMode ?? 'confirmed-content' };
+}
+function destinationBinding(data: Record<string, any>) {
+  const { defaultMode: _defaultMode, ...binding } = configurationBinding(data);
+  return binding;
+}
 
 export async function putPublicationConfiguration(
   store: Store,
@@ -60,10 +85,13 @@ export async function putPublicationConfiguration(
     const prior = (await tx.get('publication_config', id))?.data as any;
     const binding = { ...input, external, sourceId: source.id };
     const version =
-      prior &&
-      stable({ ...prior, version: undefined }) === stable({ ...binding, version: undefined })
+      prior && stable(configurationBinding(prior)) === stable(configurationBinding(binding))
         ? prior.version
         : randomUUID();
+    const destinationVersion =
+      prior && stable(destinationBinding(prior)) === stable(destinationBinding(binding))
+        ? (prior.destinationVersion ?? prior.version)
+        : version;
     // A write credential cannot silently acquire another provider/destination scope.
     for (const config of await tx.list(
       'publication_config',
@@ -84,7 +112,7 @@ export async function putPublicationConfiguration(
     if (key) await secrets.write(tx, input.organization, publicationPurpose(input.credential), key);
     else
       await secrets.readInTransaction(tx, input.organization, publicationPurpose(input.credential));
-    const data = { ...binding, version };
+    const data = { ...binding, version, destinationVersion };
     await tx.put('publication_config', { id, organization: input.organization, data });
     await tx.create('audit', {
       id: randomUUID(),
@@ -140,7 +168,12 @@ export async function publicationDestination(tx: Transaction, item: Row) {
     external.provider === 'github'
       ? `/repos/${data.githubRepository}/issues/${number}/comments`
       : `/${encodeURIComponent(external.organization)}/${external.project}/_apis/git/repositories/${external.repository}/pullRequests/${number}/threads`;
-  return { ...data, number, path };
+  return {
+    ...destinationBinding(data),
+    version: data.destinationVersion ?? data.version,
+    number,
+    path,
+  };
 }
 
 export class PublicationRejected extends Error {}

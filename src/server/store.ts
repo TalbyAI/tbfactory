@@ -32,8 +32,12 @@ export type Table =
   | 'worker_owner'
   | 'ai_resource'
   | 'publication_config'
+  | 'publication_artifact'
+  | 'artifact_share'
   | 'external_activity';
 const fields: Record<Table, Record<string, string>> = {
+  publication_artifact: { organization: 'string', workItem: 'string', data: 'object' },
+  artifact_share: { organization: 'string', workItem: 'string', data: 'object' },
   publication_config: { organization: 'string', data: 'object' },
   external_activity: { organization: 'string', workItem: 'string', run: 'string', data: 'object' },
   worker_owner: { data: 'object' },
@@ -53,6 +57,7 @@ const fields: Record<Table, Record<string, string>> = {
     external: 'object',
     enabled: 'bool',
     fingerprint: 'string',
+    publicationMode: 'option<string>',
   },
   correspondence: {
     organization: 'string',
@@ -132,6 +137,7 @@ const fields: Record<Table, Record<string, string>> = {
     createdAt: 'number',
     transitionSequence: 'option<number>',
     activeRun: 'option<object>',
+    publicationMode: 'option<string>',
   },
   fact: {
     organization: 'string',

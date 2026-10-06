@@ -173,6 +173,8 @@ No concrete endpoints, schema fields, state names, scheduling algorithm, authent
 
 ## Decisions so far
 
+- [Publish an explicitly shared, limited report Artifact](issues/08-limited-report-artifact-sharing.md#resolution--2026-10-06): delivered version-5 immutable confirmed-only references, named-human recipient access, independent sharing/publication/revocation authorization, bounded expiry and permanent retained revocations; 147 checks plus built HTTP/browser/restart acceptance pass. Retained versions and provider recovery remain available; migration and manual correspondence remain separate increments.
+
 - [Approved publication boundaries](designs/confirmed-publication-and-reconciliation.md#user-approval--2026-10-05): retain version 4, explicit publication requests and same-run ownership; allow corrections after safe nonpublication with a new Activity; require sufficient recovery evidence and preserve positive matches. Version migration remains Issue 11; [manual correspondence](issues/16-explicit-manual-provider-correspondence.md) is deferred.
 
 - [Publish confirmed Findings and reconcile uncertain outcomes](issues/07-confirmed-publication-and-reconciliation.md#approved-approval-wait-recovery-correction--2026-10-05): delivered separate execution/Approval checks, corrections after safe nonpublication with new Activities, sufficient evidence and persistent positive matches, evidence-based recovery from Approval waits, durable recovery and UI/API history; 128 checks plus built HTTP/browser/restart acceptance pass. Publication requires version 4; retained versions await Issue 11 migration and explicit manual correspondence remains deferred.

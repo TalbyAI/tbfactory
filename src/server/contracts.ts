@@ -37,6 +37,11 @@ export const activities = [
   'approval.review-decide',
   'workflow.read',
   'artifact.read',
+  'artifact.share',
+  'artifact.shared-read',
+  'artifact.revoke',
+  'approval.artifact-share',
+  'approval.artifact-revoke',
   'repository.read',
 ] as const;
 export const activitySchema = z.enum(activities);

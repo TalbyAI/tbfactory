@@ -144,10 +144,17 @@ export function TransitionBoard({
                     Open history
                   </button>
                   {!item.transitions.length && <p>No transitions in this retained version.</p>}
-                  {[3, 4].includes(item.version) && (
+                  {[3, 4, 5].includes(item.version) && (
                     <ReviewPanel
                       organization={organization}
-                      item={item as { id: string; title: string; version: number }}
+                      item={
+                        item as {
+                          id: string;
+                          title: string;
+                          version: number;
+                          publicationMode?: string;
+                        }
+                      }
                       onChange={refresh}
                     />
                   )}
@@ -294,6 +301,7 @@ export function TransitionBoard({
                 <option value="2">2 · review lifecycle</option>
                 <option value="3">3 · durable private review</option>
                 <option value="4">4 · confirmed publication</option>
+                <option value="5">5 · restricted report sharing</option>
               </select>
             </label>
             <label>

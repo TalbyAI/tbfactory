@@ -5,6 +5,8 @@ import { type Store, type Transaction } from './store';
 import { type OrganizationSecrets } from './secrets';
 import { authorized } from './authorization';
 import { scopeOf, type Run } from './reviews';
+import { activeShare } from './artifact-sharing';
+import { type ReviewArtifacts } from './review-artifacts';
 import {
   PublicationProvider,
   PublicationRejected,
@@ -29,6 +31,7 @@ export class PublicationWorker {
     private readonly owner: string,
     allowedHosts: string[],
     allowLoopback: boolean,
+    private readonly artifacts?: ReviewArtifacts,
   ) {
     this.provider = new PublicationProvider(allowedHosts, allowLoopback);
     this.factory = new Factory(store);
@@ -229,6 +232,18 @@ export class PublicationWorker {
           if (current.data.status !== 'dispatching') fail(409, 'Publication ownership lost');
           try {
             await publicationReady(tx, current);
+            if (current.data.reference) {
+              const item = (await tx.get('work_item', p.workItem))!;
+              const share = await activeShare(tx, item, current.data.reference);
+              const artifact = await tx.get('publication_artifact', share.data.contentVersion);
+              if (!artifact || !this.artifacts) fail(503, 'Artifact content unavailable');
+              await this.artifacts.verify(artifact.data as any);
+              // Serialize dispatch authorization with revocation and activation.
+              await tx.put('artifact_share', {
+                ...share,
+                data: { ...share.data, dispatches: (share.data.dispatches ?? 0) + 1 },
+              });
+            }
             const credential = await this.secrets.readInTransaction(
               tx,
               p.organization,

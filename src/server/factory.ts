@@ -17,6 +17,9 @@ import {
   invitationPreview,
 } from './invitations';
 import { definition, selection, selectionSchema } from './work-item-types';
+import { initialPublicationMode, publicationModeSchema } from './publication-provider';
+import { sharingOperation, shareCreationSchema, shareActionSchema } from './artifact-sharing';
+import { type ReviewArtifacts } from './review-artifacts';
 import {
   publicationOperation,
   publicationActionSchema,
@@ -48,6 +51,7 @@ const creation = z.strictObject({
   repository: identifier.optional(),
   title: text.max(300),
   type: z.literal('pull-request-review'),
+  publicationMode: publicationModeSchema.optional(),
 });
 const note = z.strictObject({ ...operationId, text });
 const correction = z.strictObject({ ...operationId, fact: identifier, text });
@@ -94,6 +98,10 @@ export type Operation = {
   query?: Record<string, string>;
 };
 const inputSchemas: Record<string, z.ZodType> = {
+  'sharing.create': shareCreationSchema,
+  'sharing.approve': shareActionSchema,
+  'sharing.revoke': shareActionSchema,
+  'sharing.revoke-approve': shareActionSchema,
   'publication.request': publicationActionSchema,
   'publication.approve': publicationActionSchema,
   'publication.reconcile': publicationActionSchema,
@@ -148,6 +156,7 @@ export class Factory {
   constructor(
     readonly store: Store,
     readonly settings = { credentialMaximumDays: 90, invitationDays: 7 },
+    readonly sharing: { artifacts?: ReviewArtifacts; origin?: string } = {},
   ) {}
   async execute(caller: Caller, operation: Operation): Promise<any> {
     const query = reads.parse(
@@ -211,7 +220,7 @@ export class Factory {
       if (operation.action === 'type.list') {
         await authorized(tx, caller, 'organization.read', { organization });
         return {
-          definitions: [1, 2, 3, 4].map((version) => definition('pull-request-review', version)),
+          definitions: [1, 2, 3, 4, 5].map((version) => definition('pull-request-review', version)),
           selection: await selection(tx, organization),
         };
       }
@@ -341,6 +350,8 @@ export class Factory {
         return reviewOperation(this, tx, caller, operation, input, workItem!);
       if (operation.action.startsWith('publication.'))
         return publicationOperation(this, tx, caller, operation, input, workItem!);
+      if (operation.action.startsWith('sharing.'))
+        return sharingOperation(this, tx, caller, operation, input, workItem!);
       await authorized(tx, caller, operation.action, scope);
       if (operation.action === 'work-item.read') return workItem;
       if (operation.action === 'history.read')
@@ -375,6 +386,13 @@ export class Factory {
             title: input.title,
             type: selected.type,
             version: selected.version,
+            publicationMode: await initialPublicationMode(
+              tx,
+              organization,
+              input.repository,
+              selected.version,
+              input.publicationMode,
+            ),
             state: 'registered',
             actor: caller.user,
             createdAt: Date.now(),
@@ -384,6 +402,7 @@ export class Factory {
             type: workItem.type,
             version: selected.version,
             state: 'registered',
+            publicationMode: workItem.publicationMode,
           });
           return { workItem, fact };
         }

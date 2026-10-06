@@ -29,15 +29,16 @@ export async function getServices() {
     try {
       const secrets = new OrganizationSecrets(store, await configuredRing());
       await secrets.verify();
+      const artifacts = process.env.FACTORY_ARTIFACT_DIRECTORY
+        ? new ReviewArtifacts(process.env.FACTORY_ARTIFACT_DIRECTORY)
+        : undefined;
       return {
         auth: await Authentication.create(store, identityConfig()),
-        factory: new Factory(store, lifetimeSettings()),
+        factory: new Factory(store, lifetimeSettings(), { artifacts, origin: applicationOrigin() }),
         origin: applicationOrigin(),
         secrets,
         allowLoopbackHttp: process.env.FACTORY_ALLOW_LOOPBACK_HTTP === 'true',
-        artifacts: process.env.FACTORY_ARTIFACT_DIRECTORY
-          ? new ReviewArtifacts(process.env.FACTORY_ARTIFACT_DIRECTORY)
-          : undefined,
+        artifacts,
       };
     } catch (error) {
       await store.close();

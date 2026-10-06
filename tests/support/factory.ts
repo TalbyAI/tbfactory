@@ -6,8 +6,9 @@ import { activities } from '../../src/server/contracts.ts';
 import { Factory } from '../../src/server/factory.ts';
 import { handleHttp } from '../../src/server/http.ts';
 import { startOidc } from './oidc.ts';
+import { ReviewArtifacts } from '../../src/server/review-artifacts';
 
-export async function fixture() {
+export async function fixture(artifactDirectory?: string) {
   const op = await startOidc();
   const database = `factory_${randomUUID().replaceAll('-', '')}`;
   const config = {
@@ -27,7 +28,8 @@ export async function fixture() {
     trustVerifiedEmail: true,
   };
   const auth = await Authentication.create(store, oidcConfig);
-  const factory = new Factory(store);
+  const artifacts = artifactDirectory ? new ReviewArtifacts(artifactDirectory) : undefined;
+  const factory = new Factory(store, undefined, { artifacts, origin: 'http://localhost:3000' });
   async function login(subject = 'alice', verified = true, email = `${subject}@example.test`) {
     op.identity({ subject, email, verified });
     const begin = await auth.begin();
@@ -76,7 +78,7 @@ export async function fixture() {
         },
         body: body ? JSON.stringify(body) : undefined,
       }),
-      { auth, factory, origin: 'http://localhost:3000' },
+      { auth, factory, origin: 'http://localhost:3000', artifacts },
     );
     return { status: response.status, body: (await response.json()) as any };
   }
