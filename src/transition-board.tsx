@@ -301,6 +301,7 @@ export function TransitionBoard({
                 <option value="2">2 · review lifecycle</option>
                 <option value="3">3 · durable private review</option>
                 <option value="4">4 · confirmed publication</option>
+                <option value="5">5 · restricted report sharing</option>
               </select>
             </label>
             <label>
