@@ -12,7 +12,7 @@ export async function fixture(artifactDirectory?: string) {
   const op = await startOidc();
   const database = `factory_${randomUUID().replaceAll('-', '')}`;
   const config = {
-    url: 'ws://127.0.0.1:18000/rpc',
+    url: process.env.FACTORY_TEST_DATABASE_URL ?? 'ws://127.0.0.1:18000/rpc',
     namespace: 'test',
     database,
     username: 'root',
