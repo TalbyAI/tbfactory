@@ -55,6 +55,13 @@ export type RunData = {
   config?: Record<string, any>;
   approval?: { actor: string; binding: string; bindingVersion?: 1 | 2 };
   requestApproval?: unknown;
+  cancellation?: {
+    request: string;
+    status: 'requested' | 'awaiting-publication-resolution' | 'confirmed' | 'completed-before-stop';
+    requestedAt: number;
+    confirmedAt?: number;
+    evidence?: Record<string, unknown>;
+  };
   report?: string;
   decision?: string;
   handoff?: string;
@@ -277,7 +284,7 @@ export async function decisionUsable(tx: Transaction, item: Row, run: Run | unde
     payload.run === run.id &&
     payload.reportVersion === run.data.report &&
     run.data.decision === fact.id &&
-    !['superseded', 'stopped'].includes(run.data.status) &&
+    !['superseded', 'stopped', 'rejected'].includes(run.data.status) &&
     (await reportCurrent(tx, item, report))
   );
 }
@@ -410,6 +417,36 @@ export async function reviewOperation(
   const run = (await tx.get('workflow_run', input.run)) as Run | undefined;
   if (!run || run.organization !== item.organization || run.workItem !== item.id)
     fail(404, 'Resource not found');
+  if (operation.action === 'review.cancel') {
+    await authorized(tx, caller, 'workflow.cancel', scope);
+    return factory.mutate(tx, caller, operation, input, async () => {
+      if ((item.activeRun as any)?.id !== run.id)
+        fail(409, 'Workflow Run no longer owns this Work Item');
+      if (['completed', 'superseded', 'stopped', 'cancelled', 'rejected'].includes(run.data.status))
+        fail(409, 'Workflow Run is already stopped');
+      if (run.data.cancellation)
+        fail(409, 'A Cancellation Request already exists for this Workflow Run');
+      const fact = await factory.fact(tx, caller, item, 'workflow.cancellation-requested', {
+        run: run.id,
+        workflow: run.data.workflow,
+        statusAtRequest: run.data.status,
+        publication: run.data.publication ?? null,
+      });
+      const updated = {
+        ...run,
+        data: {
+          ...run.data,
+          cancellation: {
+            request: fact.id,
+            status: 'requested' as const,
+            requestedAt: fact.recordedAt,
+          },
+        },
+      };
+      await tx.put('workflow_run', updated);
+      return { workflowRun: runView(updated) };
+    });
+  }
   if (operation.action === 'review.decide') {
     if (!(await publicationCanBeCorrected(tx, await publicationForRun(tx, run))))
       fail(409, 'Publication already binds this Review Decision');

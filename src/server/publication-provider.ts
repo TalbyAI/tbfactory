@@ -193,13 +193,21 @@ export class PublicationProvider {
     private readonly allowedHosts: string[],
     private readonly allowLoopback: boolean,
   ) {}
-  private async verifyRepository(destination: any, key: string) {
+  private async verifyRepository(destination: any, key: string, signal?: AbortSignal) {
     const external = destination.external;
     const path =
       external.provider === 'github'
         ? `/repos/${destination.githubRepository}`
         : `/${encodeURIComponent(external.organization)}/${external.project}/_apis/git/repositories/${external.repository}`;
-    const { value } = await this.request({ ...destination, path }, key, 'GET');
+    const { value } = await this.request(
+      { ...destination, path },
+      key,
+      'GET',
+      undefined,
+      1,
+      undefined,
+      signal,
+    );
     if (
       String(value.id).toLowerCase() !== external.repository ||
       (external.provider !== 'github' &&
@@ -214,6 +222,7 @@ export class PublicationProvider {
     content?: string,
     page = 1,
     beforePost?: () => Promise<string>,
+    signal?: AbortSignal,
   ) {
     await validateEndpoint(destination.endpoint, this.allowedHosts, this.allowLoopback);
     if (method === 'POST' && beforePost) key = await beforePost();
@@ -226,7 +235,9 @@ export class PublicationProvider {
     const response = await fetch(`${destination.endpoint}${destination.path}${query}`, {
       method,
       redirect: 'error',
-      signal: AbortSignal.timeout(15000),
+      signal: signal
+        ? AbortSignal.any([signal, AbortSignal.timeout(15000)])
+        : AbortSignal.timeout(15000),
       headers: {
         authorization: github
           ? `Bearer ${key}`
@@ -254,9 +265,15 @@ export class PublicationProvider {
     const value = await response.json();
     return { value, more: !!response.headers.get('link')?.includes('rel="next"') };
   }
-  async publish(destination: any, key: string, content: string, beforePost: () => Promise<string>) {
-    await this.verifyRepository(destination, key);
-    const { value } = await this.request(destination, key, 'POST', content, 1, beforePost);
+  async publish(
+    destination: any,
+    key: string,
+    content: string,
+    beforePost: () => Promise<string>,
+    signal?: AbortSignal,
+  ) {
+    await this.verifyRepository(destination, key, signal);
+    const { value } = await this.request(destination, key, 'POST', content, 1, beforePost, signal);
     const result = effect(destination.external.provider, value, content);
     if (!result) throw Error('Provider success could not be confirmed');
     return result;

@@ -5,6 +5,7 @@ import { reviewRuntime } from './support/review-runtime.ts';
 import { setPolicy } from '../src/server/operator.ts';
 import { serviceUser } from '../src/server/review-configuration.ts';
 import { ReviewWorker, recoverWorkerLock, recoverStoppedRun } from '../src/server/review-worker.ts';
+import { ReviewArtifacts } from '../src/server/review-artifacts.ts';
 import { RepositorySandbox } from '../src/server/review-sandbox.ts';
 import { type Run } from '../src/server/reviews.ts';
 import { join } from 'node:path';
@@ -76,6 +77,288 @@ test('Concurrent review requests retain exclusive intake ownership while new Fac
     );
   } finally {
     await f.close();
+  }
+});
+
+test('An authorized User can request cancellation without releasing Workflow Run ownership', async () => {
+  const f = await fixture();
+  try {
+    await f.bootstrap('alpha');
+    const base = '/api/organizations/alpha';
+    await f.request(`${base}/work-item-types`, {
+      operationId: 'select-review',
+      type: 'pull-request-review',
+      version: 3,
+      enabled: true,
+    });
+    const created = await f.request(`${base}/work-items`, {
+      operationId: 'create-review',
+      project: 'alpha-project',
+      repository: 'alpha-repo',
+      title: 'Cancellation remains exclusive',
+      type: 'pull-request-review',
+    });
+    const path = `${base}/work-items/${created.body.workItem.id}`;
+    const accepted = await f.request(`${path}/transition-requests`, {
+      operationId: 'start-review',
+      transition: 'request-review',
+      expectedState: 'registered',
+      version: 3,
+      inputs: { reviewBrief: 'Inspect cancellation ownership' },
+    });
+    assert.equal(accepted.status, 200);
+    const run = accepted.body.workflowRun;
+    const requested = await f.request(`${path}/workflow-cancellations`, {
+      operationId: 'request-cancellation',
+      run: run.id,
+    });
+    assert.equal(requested.status, 200);
+    assert.equal(requested.body.workflowRun.cancellation.status, 'requested');
+    assert.equal(requested.body.workflowRun.status, 'queued');
+    assert.equal((await f.request(path)).body.activeRun.id, run.id);
+
+    const facts = await f.request(`${path}/facts`);
+    assert.ok(
+      facts.body.items.some(
+        (fact: any) =>
+          fact.kind === 'workflow.cancellation-requested' && fact.payload.run === run.id,
+      ),
+    );
+    const competing = await f.request(`${path}/transition-requests`, {
+      operationId: 'competing-review',
+      transition: 'request-review',
+      expectedState: 'registered',
+      version: 3,
+      inputs: { reviewBrief: 'Must wait for confirmed stop' },
+    });
+    assert.equal(competing.status, 409);
+  } finally {
+    await f.close();
+  }
+});
+
+test('A scoped API Credential can request cancellation unless policy requires human intervention', async () => {
+  const f = await fixture();
+  try {
+    await f.bootstrap('alpha');
+    const base = '/api/organizations/alpha';
+    const credential = await f.request(`${base}/api-credentials`, {
+      operationId: 'issue-cancellation-key',
+      label: 'Cancellation operator',
+      activities: ['work-item.read', 'workflow.cancel'],
+      expiresAt: Date.now() + 3600000,
+    });
+    assert.equal(credential.status, 200);
+    await f.request(`${base}/work-item-types`, {
+      operationId: 'select-review',
+      type: 'pull-request-review',
+      version: 3,
+      enabled: true,
+    });
+    const created = await f.request(`${base}/work-items`, {
+      operationId: 'create-review',
+      project: 'alpha-project',
+      repository: 'alpha-repo',
+      title: 'Policy-gated cancellation',
+      type: 'pull-request-review',
+    });
+    const path = `${base}/work-items/${created.body.workItem.id}`;
+    const accepted = await f.request(`${path}/transition-requests`, {
+      operationId: 'start-review',
+      transition: 'request-review',
+      expectedState: 'registered',
+      version: 3,
+      inputs: { reviewBrief: 'Check API Credential authorization' },
+    });
+    const run = accepted.body.workflowRun;
+    const humanPolicy = await setPolicy(f.store, {
+      organization: 'alpha',
+      user: f.alice.user.id,
+      activity: 'workflow.cancel',
+      scope: 'repository',
+      scopeId: 'alpha-repo',
+      effect: 'human',
+    });
+    const request = (operationId: string) =>
+      f.request(
+        `${path}/workflow-cancellations`,
+        { operationId, run: run.id },
+        credential.body.token,
+        true,
+      );
+    assert.equal((await request('api-denied-by-human-policy')).status, 403);
+    assert.equal((await f.request(`${path}/reviews`)).body.runs[0].cancellation, undefined);
+    assert.equal(
+      (
+        await f.request(`${base}/policies/${humanPolicy.id}/remove`, {
+          operationId: 'remove-policy',
+        })
+      ).status,
+      200,
+    );
+    const allowed = await request('api-allowed-by-user-policy');
+    assert.equal(allowed.status, 200);
+    assert.equal(allowed.body.workflowRun.cancellation.status, 'requested');
+  } finally {
+    await f.close();
+  }
+});
+
+test('The worker confirms cancellation of a suspended intake before releasing the Work Item', async () => {
+  const r = await reviewRuntime();
+  try {
+    const base = '/api/organizations/alpha';
+    await r.f.request(`${base}/work-item-types`, {
+      operationId: 'select-review',
+      type: 'pull-request-review',
+      version: 3,
+      enabled: true,
+    });
+    const created = await r.f.request(`${base}/work-items`, {
+      operationId: 'create-review',
+      project: 'alpha-project',
+      repository: 'alpha-repo',
+      title: 'Cancel suspended intake',
+      type: 'pull-request-review',
+    });
+    const path = `${base}/work-items/${created.body.workItem.id}`;
+    const accepted = await r.f.request(`${path}/transition-requests`, {
+      operationId: 'start-review',
+      transition: 'request-review',
+      expectedState: 'registered',
+      version: 3,
+      inputs: { reviewBrief: 'Wait for required review Facts' },
+    });
+    const run = accepted.body.workflowRun;
+    await r.startWorker();
+    await r.wait(path, 'waiting-inputs');
+    await r.stopWorker();
+
+    const requested = await r.f.request(`${path}/workflow-cancellations`, {
+      operationId: 'request-cancellation',
+      run: run.id,
+    });
+    assert.equal(requested.body.workflowRun.cancellation.status, 'requested');
+    assert.equal((await r.f.request(path)).body.activeRun.id, run.id);
+    assert.equal(
+      (
+        await r.f.request(`${path}/transition-requests`, {
+          operationId: 'competing-review',
+          transition: 'request-review',
+          expectedState: 'registered',
+          version: 3,
+          inputs: { reviewBrief: 'Wait until stop is confirmed' },
+        })
+      ).status,
+      409,
+    );
+
+    await r.startWorker();
+    const stopped = await r.wait(path, 'cancelled', 2500);
+    assert.equal(
+      stopped.runs.find((candidate: any) => candidate.id === run.id).cancellation.status,
+      'confirmed',
+    );
+    assert.equal((await r.f.request(path)).body.activeRun, undefined);
+    const facts = await r.f.request(`${path}/facts`);
+    assert.ok(
+      facts.body.items.some(
+        (fact: any) =>
+          fact.kind === 'workflow.cancellation-confirmed' &&
+          fact.payload.run === run.id &&
+          fact.payload.confirmedStopped === true,
+      ),
+    );
+    assert.equal(r.requests.length, 0);
+    await r.stopWorker();
+    await r.startWorker();
+    assert.equal(
+      (await r.f.request(`${path}/reviews`)).body.runs.find(
+        (candidate: any) => candidate.id === run.id,
+      ).status,
+      'cancelled',
+    );
+    assert.equal(r.requests.length, 0);
+  } finally {
+    await r.close();
+  }
+});
+
+test('The worker aborts active AI execution and does not replay it after confirmed cancellation', async () => {
+  const r = await reviewRuntime();
+  try {
+    r.behavior('delay', 10000);
+    const path = await r.createItem('cancel-running-ai');
+    await r.startWorker();
+    await startReview(r, path);
+    const deadline = Date.now() + 15000;
+    while (!r.requests.length && Date.now() < deadline)
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.equal(r.requests.length, 1);
+    const run = (await r.f.request(`${path}/reviews`)).body.runs.find(
+      (candidate: any) => candidate.workflow === 'review-v1',
+    );
+    assert.equal(
+      (
+        await r.f.request(`${path}/workflow-cancellations`, {
+          operationId: 'cancel-running-ai',
+          run: run.id,
+        })
+      ).status,
+      200,
+    );
+    const stopped = await r.wait(path, 'cancelled', 10000);
+    const cancelled = stopped.runs.find((candidate: any) => candidate.id === run.id);
+    assert.equal(cancelled.cancellation.status, 'confirmed');
+    assert.equal(cancelled.report, undefined);
+    assert.equal((await r.f.request(path)).body.activeRun, undefined);
+    assert.equal(r.requests.length, 1);
+    await r.stopWorker();
+    await r.startWorker();
+    assert.equal(r.requests.length, 1);
+  } finally {
+    await r.close();
+  }
+});
+
+test('Cancellation after report preparation preserves the private Artifact and immutable Facts', async () => {
+  const r = await reviewRuntime();
+  try {
+    const path = await r.createItem('cancel-prepared-report');
+    await r.startWorker();
+    await startReview(r, path);
+    const view = await r.wait(path, 'waiting-review');
+    const run = view.runs.find((candidate: any) => candidate.workflow === 'review-v1');
+    const report = await r.f.store.transaction((tx) => tx.get('review_report', run.report));
+    const artifacts = new ReviewArtifacts(join(r.directory, 'artifacts'));
+    const content = await artifacts.verify(report!.data as any);
+    await r.stopWorker();
+
+    assert.equal(
+      (
+        await r.f.request(`${path}/workflow-cancellations`, {
+          operationId: 'cancel-prepared-report',
+          run: run.id,
+        })
+      ).status,
+      200,
+    );
+    await r.startWorker();
+    const stopped = await r.wait(path, 'cancelled');
+    const cancelled = stopped.runs.find((candidate: any) => candidate.id === run.id);
+    assert.equal(cancelled.report, report!.id);
+    assert.deepEqual(
+      await r.f.store.transaction((tx) => tx.get('review_report', run.report)),
+      report,
+    );
+    assert.deepEqual(await artifacts.verify(report!.data as any), content);
+    const facts = await r.f.request(`${path}/facts`);
+    assert.ok(facts.body.items.some((fact: any) => fact.kind === 'review.report-generated'));
+    assert.ok(
+      facts.body.items.some((fact: any) => fact.kind === 'workflow.cancellation-confirmed'),
+    );
+  } finally {
+    await r.close();
   }
 });
 
@@ -465,6 +748,60 @@ test('A crashed worker retains ownership until an operator confirms stopped exec
     await recoverStoppedRun(r.f.store, join(r.directory, 'worker'), run.id);
     const recovered = await r.wait(path, 'stopped');
     assert.equal(recovered.consumption[0].outcome, 'uncertain');
+    assert.equal((await r.f.request(path)).body.activeRun, undefined);
+    await r.startWorker();
+    assert.equal(r.requests.length, 1);
+  } finally {
+    await r.close();
+  }
+});
+
+test('Cancellation after a worker crash waits for manual stop recovery and retains uncertain call evidence', async () => {
+  const r = await reviewRuntime();
+  try {
+    r.behavior('delay', 10000);
+    const path = await r.createItem('cancel-crash');
+    const worker = await r.startWorker();
+    await startReview(r, path);
+    const deadline = Date.now() + 20000;
+    while (!r.requests.length && Date.now() < deadline)
+      await new Promise((res) => setTimeout(res, 100));
+    assert.equal(r.requests.length, 1);
+    const view = (await r.f.request(`${path}/reviews`)).body;
+    const run = view.runs.find((candidate: any) => candidate.workflow === 'review-v1');
+    assert.equal(
+      (
+        await r.f.request(`${path}/workflow-cancellations`, {
+          operationId: 'cancel-before-crash-recovery',
+          run: run.id,
+        })
+      ).status,
+      200,
+    );
+    const pid = worker.pid!;
+    worker.kill('SIGKILL');
+    await new Promise<void>((res) => worker.once('exit', () => res()));
+    await writeFile(join(r.directory, 'worker', 'worker.lock'), '{');
+    await recoverWorkerLock(r.f.store, join(r.directory, 'worker'), pid);
+
+    await r.startWorker();
+    const interrupted = await r.wait(path, 'recovery-required');
+    assert.equal(
+      interrupted.runs.find((candidate: any) => candidate.id === run.id).cancellation.status,
+      'requested',
+    );
+    assert.equal(interrupted.consumption[0].outcome, 'reserved');
+    assert.ok((await r.f.request(path)).body.activeRun);
+    await r.stopWorker();
+
+    const recovered = await recoverStoppedRun(r.f.store, join(r.directory, 'worker'), run.id);
+    assert.equal(recovered.status, 'cancelled');
+    const stopped = await r.wait(path, 'cancelled');
+    assert.equal(stopped.consumption[0].outcome, 'uncertain');
+    assert.equal(
+      stopped.runs.find((candidate: any) => candidate.id === run.id).cancellation.status,
+      'confirmed',
+    );
     assert.equal((await r.f.request(path)).body.activeRun, undefined);
     await r.startWorker();
     assert.equal(r.requests.length, 1);

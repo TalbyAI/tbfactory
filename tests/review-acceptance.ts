@@ -189,6 +189,17 @@ try {
       await r.wait(itemPath, 'waiting-review');
       uiItems[behavior] = itemPath.split('/').at(-1)!;
     }
+    r.behavior('mixed');
+    const cancellationPath = await r.createItem('cancellation-browser-check');
+    await browser.json(origin, `${cancellationPath}/transition-requests`, {
+      operationId: 'start-cancellation-browser-check',
+      transition: 'request-review',
+      expectedState: 'registered',
+      version: 3,
+      inputs: { reviewBrief: 'Verify cancellation request and confirmed-stop UI states' },
+    });
+    await r.wait(cancellationPath, 'waiting-review');
+    uiItems.cancellation = cancellationPath.split('/').at(-1)!;
   }
   const evidence = {
     origin,
@@ -207,6 +218,9 @@ try {
       'Incomplete decisions rejected through production HTTP',
       'Mixed human decisions and private rejection reasons persist through web/database restart',
       'Same waiting run resumes and completes without publication or Factory State Transition',
+      ...(uiItems.cancellation
+        ? ['Suspended-report cancellation Work Item is available for the protected browser drill']
+        : []),
     ],
     directory: r.directory,
   };

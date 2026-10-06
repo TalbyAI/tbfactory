@@ -33,6 +33,7 @@ export const activities = [
   'review.recover',
   'approval.review-publish',
   'review.supersede',
+  'workflow.cancel',
   'approval.review-generate',
   'approval.review-decide',
   'workflow.read',

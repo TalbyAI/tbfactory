@@ -52,6 +52,10 @@ export class ReviewAgent {
       run.data.status !== 'running'
     )
       fail(409, 'Workflow ownership lost');
+    if (
+      ['requested', 'awaiting-publication-resolution'].includes(run.data.cancellation?.status ?? '')
+    )
+      fail(409, 'Workflow cancellation is pending');
     const caller = await executionCaller(tx, run);
     if (!(await reviewInputsCurrent(tx, item, run.data.inputs!)))
       fail(409, 'Relevant review input versions changed');

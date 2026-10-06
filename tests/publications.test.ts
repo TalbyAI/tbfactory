@@ -9,6 +9,169 @@ import { putPublicationConfiguration } from '../src/server/publication-provider'
 import { putSource as configureSource } from '../src/server/observations';
 import { fixture } from './support/factory';
 
+test('Cancellation of retained publication without dispatch tracking requires provider evidence and User resolution', async () => {
+  const f = await publicationRuntime('github');
+  try {
+    await setPolicy(f.r.f.store, {
+      organization: 'alpha',
+      user: f.r.f.alice.user.id,
+      activity: 'review.publish',
+      scope: 'organization',
+      scopeId: 'alpha',
+      effect: 'human',
+    });
+    assert.equal((await f.act('review-publications')).status, 200);
+    assert.equal((await f.view()).publications[0].status, 'waiting-approval');
+    const publication = (await f.view()).publications[0];
+    await f.r.f.store.transaction(async (tx) => {
+      const current = (await tx.get('external_activity', publication.id))!;
+      const data = { ...(current.data as any) };
+      delete data.dispatchAuthorized;
+      await tx.put('external_activity', { ...current, data });
+    });
+    const requested = await f.r.f.request(`${f.path}/workflow-cancellations`, {
+      operationId: 'cancel-retained-publication',
+      run: f.run.id,
+    });
+    assert.equal(requested.status, 200);
+    await f.r.startWorker();
+    const deadline = Date.now() + 5000;
+    let view: any;
+    do {
+      view = await f.view();
+      if (
+        view.runs.find((run: any) => run.id === f.run.id)?.cancellation?.status ===
+        'awaiting-publication-resolution'
+      )
+        break;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    } while (Date.now() < deadline);
+    assert.equal(
+      view.runs.find((run: any) => run.id === f.run.id).cancellation.status,
+      'awaiting-publication-resolution',
+    );
+    assert.ok((await f.r.f.request(f.path)).body.activeRun);
+    assert.equal((await f.act('publication-reconciliation')).status, 200);
+    view = await f.wait('uncertain');
+    const evidence = view.publications[0].evidence;
+    assert.ok(evidence);
+    assert.equal(
+      view.publicationHistory.find((fact: any) => fact.id === evidence).payload.noDispatch,
+      false,
+    );
+    assert.equal(
+      (
+        await f.act('publication-confirmation', {
+          evidence,
+          resolution: 'not-published',
+          reason: 'Read-only provider evidence contains no matching effect',
+          confirmedStopped: true,
+        })
+      ).status,
+      200,
+    );
+    const resolved = await f.view();
+    assert.equal(resolved.runs.find((run: any) => run.id === f.run.id).status, 'cancelled');
+    assert.equal(
+      resolved.runs.find((run: any) => run.id === f.run.id).cancellation.status,
+      'confirmed',
+    );
+    assert.equal((await f.r.f.request(f.path)).body.activeRun, undefined);
+    assert.equal(f.posts.length, 0);
+  } finally {
+    await f.close();
+  }
+});
+
+test('Cancellation during an authorized provider request retains ownership until positive-effect reconciliation', async () => {
+  const f = await publicationRuntime('github');
+  try {
+    f.behavior('slow');
+    assert.equal((await f.act('review-publications')).status, 200);
+    await f.r.startWorker();
+    await f.wait('dispatching');
+    const deadline = Date.now() + 5000;
+    while (!f.effects.length && Date.now() < deadline)
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.equal(f.effects.length, 1);
+    assert.equal(
+      (
+        await f.r.f.request(`${f.path}/workflow-cancellations`, {
+          operationId: 'cancel-held-provider',
+          run: f.run.id,
+        })
+      ).status,
+      200,
+    );
+    const cancelDeadline = Date.now() + 5000;
+    let view: any;
+    do {
+      view = await f.view();
+      if (
+        view.runs.find((run: any) => run.id === f.run.id)?.cancellation?.status ===
+        'awaiting-publication-resolution'
+      )
+        break;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    } while (Date.now() < cancelDeadline);
+    assert.equal(
+      view.runs.find((run: any) => run.id === f.run.id).cancellation.status,
+      'awaiting-publication-resolution',
+    );
+    assert.ok((await f.r.f.request(f.path)).body.activeRun);
+    assert.equal(
+      (
+        await f.r.f.request(`${f.path}/transition-requests`, {
+          operationId: 'replacement-before-provider-resolution',
+          transition: 'request-review',
+          expectedState: 'registered',
+          version: 4,
+          inputs: { reviewBrief: 'Cannot replace an unresolved provider call' },
+        })
+      ).status,
+      409,
+    );
+    f.release();
+    view = await f.wait('uncertain');
+    assert.equal(view.publications[0].dispatchAuthorized, undefined);
+    assert.equal(f.effects.length, 1);
+    assert.equal((await f.act('publication-reconciliation')).status, 200);
+    view = await f.wait('uncertain');
+    const evidence = view.publications[0].evidence;
+    assert.ok(evidence);
+    assert.equal(
+      view.publicationHistory.find((fact: any) => fact.id === evidence).payload.matches.length,
+      1,
+    );
+    assert.equal(
+      (
+        await f.act('publication-confirmation', {
+          evidence,
+          resolution: 'completed',
+          reason: 'Read-only provider evidence confirms the effect',
+          confirmedStopped: true,
+        })
+      ).status,
+      200,
+    );
+    view = await f.view();
+    assert.equal(view.runs.find((run: any) => run.id === f.run.id).status, 'completed');
+    assert.equal(
+      view.runs.find((run: any) => run.id === f.run.id).cancellation.status,
+      'completed-before-stop',
+    );
+    assert.equal(f.posts.length, 1);
+    assert.equal(f.effects.length, 1);
+    assert.equal((await f.r.f.request(f.path)).body.activeRun, undefined);
+    const facts = await f.r.f.request(`${f.path}/facts`);
+    assert.ok(
+      facts.body.items.some((fact: any) => fact.kind === 'workflow.cancellation-not-applied'),
+    );
+  } finally {
+    await f.close();
+  }
+});
+
 test('Publication declares its Approval Point in version 4 without modifying retained Work Item Types', async () => {
   const f = await fixture();
   try {

@@ -168,6 +168,10 @@ export async function publicationReady(tx: Transaction, p: Publication) {
   const item = (await tx.get('work_item', p.workItem))!;
   const run = (await tx.get('workflow_run', p.run)) as Run;
   if ((item.activeRun as any)?.id !== run.id) fail(409, 'Publication ownership lost');
+  if (
+    ['requested', 'awaiting-publication-resolution'].includes(run.data.cancellation?.status ?? '')
+  )
+    fail(409, 'Workflow cancellation is pending');
   const fact = await tx.get('fact', p.data.decision);
   if (!fact || !(await decisionUsable(tx, item, run, fact)))
     fail(409, 'Current human Review Decision required');
@@ -345,6 +349,11 @@ export async function publicationOperation(
       return { publication: publicationView(updated) };
     }
     if (input.evidence !== p!.data.evidence) fail(409, 'Latest provider evidence required');
+    const cancellationPending = ['requested', 'awaiting-publication-resolution'].includes(
+      run.data.cancellation?.status ?? '',
+    );
+    if (cancellationPending && input.resolution === 'retry')
+      fail(409, 'Resolve the cancellation before retrying publication');
     const evidence = await tx.get('fact', input.evidence);
     if (
       !evidence ||
@@ -410,6 +419,46 @@ export async function publicationOperation(
           effects,
           userConfirmed: true,
         });
+      if (cancellationPending && input.resolution === 'completed') {
+        const current = (await tx.get('workflow_run', run.id)) as Run;
+        const cancellation = {
+          ...current.data.cancellation!,
+          status: 'completed-before-stop' as const,
+          confirmedAt: Date.now(),
+          evidence: { providerOutcome: 'completed', evidence: input.evidence },
+        };
+        await tx.put('workflow_run', { ...current, data: { ...current.data, cancellation } });
+        await factory.fact(tx, caller, item, 'workflow.cancellation-not-applied', {
+          run: run.id,
+          request: cancellation.request,
+          reason: 'Publication was confirmed complete before cancellation could stop it',
+          publication: p!.id,
+          attempt: p!.data.attempt,
+          evidence: input.evidence,
+        });
+      } else if (cancellationPending && input.resolution === 'not-published') {
+        const current = (await tx.get('workflow_run', run.id)) as Run;
+        const confirmedAt = Date.now();
+        const cancellation = {
+          ...current.data.cancellation!,
+          status: 'confirmed' as const,
+          confirmedAt,
+          evidence: { providerOutcome: 'not-published', evidence: input.evidence },
+        };
+        await tx.put('workflow_run', {
+          ...current,
+          data: { ...current.data, status: 'cancelled', cancellation },
+        });
+        await factory.fact(tx, caller, item, 'workflow.cancellation-confirmed', {
+          run: run.id,
+          request: cancellation.request,
+          publication: p!.id,
+          attempt: p!.data.attempt,
+          evidenceFact: input.evidence,
+          confirmedStopped: true,
+          evidence: cancellation.evidence,
+        });
+      }
     }
     await factory.fact(tx, caller, item, 'publication.recovery-decided', {
       run: run.id,

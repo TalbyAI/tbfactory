@@ -137,6 +137,41 @@ remain persistent in-app notifications. Complete Facts, enabled resources, match
 rules for automatic execution and current policies gate the durable handoff.
 The worker checks prerequisite changes before resuming an intake.
 
+## Workflow Run cancellation
+
+An authorized User can request cancellation through the board or
+`POST /api/organizations/{organization}/work-items/{item}/workflow-cancellations`
+with `{ "operationId": "cancel-1", "run": "workflow-run-id" }`. The operation
+requires `workflow.cancel` and records an immutable
+`workflow.cancellation-requested` Fact. Existing policy rules apply: a scoped API
+Credential can act for its User unless policy requires human intervention; an
+authenticated browser User satisfies that human-intervention requirement. No
+separate Approval Point is added.
+
+A request does not release Work Item ownership. The UI and
+`GET .../work-items/{item}/reviews` show cancellation as `requested` while the
+worker drains execution and confirms the sandbox stopped. A confirmed stop records
+`workflow.cancellation-confirmed`, sets the Workflow Run to `cancelled` and releases
+ownership. If execution cannot be confirmed stopped, the run stays exclusive in
+`recovery-required`. Queued runs and suspended intake/review waits are cancelled
+without resuming their Workflow snapshot. Reports, Artifact content, decisions,
+Facts and completed Activities remain available.
+
+Publication has a separate stop boundary. A persisted `dispatchAuthorized: false`
+proves the current attempt did not send a POST, so the worker can confirm
+cancellation. If dispatch is authorized or retained tracking is missing, the run
+stays exclusive as `awaiting-publication-resolution`. The worker can gather
+read-only provider evidence, but cancellation does not retry or infer that an
+effect is absent. An authorized User must resolve the outcome; a confirmed existing
+effect is retained as completed and records that cancellation did not apply.
+
+If the worker process crashes, do not let a replacement worker confirm a pending
+request automatically. Recover the old worker lock, keep workers stopped while
+running `workflow-recover`, and verify stopped execution. Reserved model calls are
+retained as uncertain and are not replayed. Recovery records the confirmed
+cancellation and releases ownership only after the stopped-run recovery succeeds.
+No Work Item Type currently defines automatic cancellation rules.
+
 `GET .../work-items/{item}/reviews` returns safe run state, notifications, declared
 inputs, report summaries, proposed Findings and per-call consumption. Private
 Markdown is available at `GET .../work-items/{item}/reviews/{report}/artifact`
@@ -254,6 +289,13 @@ automatically replayed. Their run stops and releases ownership after confirmatio
 When all calls have known completed outcomes, recovery can reconstruct the retained
 Workflow using its cached results without repeating those provider calls.
 
+For a Workflow Run with a pending cancellation, stopped-run recovery records
+`workflow.cancellation-confirmed` and sets the run to `cancelled` after verifying
+the sandbox stopped. A cancelled run with uncertain model-call outcomes is not
+replayed. Publication-owned runs use the provider evidence and User confirmation
+flow in [confirmed publication](confirmed-publication.md); worker restart alone
+does not resolve an authorized or untracked provider attempt.
+
 Validated report output is staged durably before file publication. Recovery reuses
 that output and deterministic Artifact content to finish interrupted attachment.
 Attached reports require matching metadata, size and content digest. A missing or
@@ -277,6 +319,11 @@ npm run acceptance
 npm run acceptance:reviews
 node --import tsx tests/review-acceptance.ts --hold
 ```
+
+The `--hold` evidence includes `uiItems.cancellation`, a suspended report run for
+the protected board drill. Open that Work Item in the authenticated browser, request
+cancellation, and verify the panel shows `requested` before the worker confirms
+`cancelled`. Its report and private Artifact remain available afterward.
 
 The review fixture uses a separate real worker, Docker checkout/tools, real SurrealDB,
 LibSQL/files and a controllable provider HTTP endpoint. The built application flow

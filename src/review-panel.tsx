@@ -53,8 +53,11 @@ export function ReviewPanel({
   }
   if (!view) return error ? <p role="alert">{error}</p> : null;
   const active = view.runs.find(
-    (r: any) => !['completed', 'superseded', 'stopped'].includes(r.status),
+    (r: any) => !['completed', 'rejected', 'cancelled', 'superseded', 'stopped'].includes(r.status),
   );
+  const cancellations = view.runs
+    .filter((run: any) => run.cancellation)
+    .sort((a: any, b: any) => Number(b.createdAt) - Number(a.createdAt));
   return (
     <section className="review-panel" aria-label={`Private review ${item.title}`}>
       <h4>Private Review Reports</h4>
@@ -63,11 +66,45 @@ export function ReviewPanel({
         Refresh review
       </button>
       {active && (
-        <p>
-          Execution: <strong>{active.status}</strong> · Workflow: {active.workflow}
-        </p>
+        <div>
+          <p>
+            Execution: <strong>{active.status}</strong> · Workflow: {active.workflow}
+          </p>
+          {!active.cancellation && (
+            <button
+              disabled={busy}
+              onClick={() => void write('workflow-cancellations', { run: active.id })}
+            >
+              Request Workflow Run cancellation
+            </button>
+          )}
+        </div>
       )}
       {active?.error && <p role="status">{active.error}</p>}
+      {cancellations.length > 0 && (
+        <section aria-label="Workflow Run cancellations">
+          <h5>Workflow Run cancellations</h5>
+          {cancellations.map((run: any) => {
+            const status = run.cancellation.status;
+            const detail =
+              status === 'requested'
+                ? 'The worker is stopping execution; Work Item ownership remains in place.'
+                : status === 'awaiting-publication-resolution'
+                  ? 'The publication outcome is unresolved; Work Item ownership remains in place.'
+                  : status === 'confirmed'
+                    ? 'The worker confirmed the stop and released Work Item ownership.'
+                    : status === 'completed-before-stop'
+                      ? 'Publication completed before the worker could stop the Workflow Run.'
+                      : '';
+            return (
+              <p role="status" key={run.id}>
+                Workflow Run {run.id.slice(0, 12)} · Cancellation: <strong>{status}</strong>.{' '}
+                {detail}
+              </p>
+            );
+          })}
+        </section>
+      )}
       {view.notifications
         .filter((n: any) => !n.resolved)
         .map((n: any) => (

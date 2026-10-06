@@ -66,11 +66,136 @@ export class PublicationWorker {
       );
     });
   }
-  async process(run: string) {
+  async cancelRequested(
+    run: string,
+  ): Promise<'confirmed' | 'awaiting' | 'completed-before-stop' | 'none'> {
+    return this.store.transaction(async (tx) => {
+      if (((await tx.get('worker_owner', 'review'))?.data as any)?.owner !== this.owner)
+        fail(409, 'Worker ownership lost');
+      const current = (await tx.get('workflow_run', run)) as Run;
+      const cancellation = current.data.cancellation;
+      if (
+        !cancellation ||
+        !['requested', 'awaiting-publication-resolution'].includes(cancellation.status)
+      )
+        return 'none';
+      const p = await publicationForRun(tx, current);
+      if (!p) return 'none';
+      const item = (await tx.get('work_item', p.workItem))!;
+      if (p.data.status === 'completed') {
+        const updatedCancellation = {
+          ...cancellation,
+          status: 'completed-before-stop' as const,
+          confirmedAt: Date.now(),
+          evidence: { providerOutcome: 'completed' },
+        };
+        await tx.put('workflow_run', {
+          ...current,
+          data: { ...current.data, status: 'completed', cancellation: updatedCancellation },
+        });
+        if ((item.activeRun as any)?.id === run)
+          await tx.put('work_item', { ...item, activeRun: undefined });
+        await this.factory.fact(
+          tx,
+          { user: 'worker', human: false },
+          item,
+          'workflow.cancellation-not-applied',
+          {
+            run,
+            request: cancellation.request,
+            reason: 'Publication completed before the cancellation request could stop it',
+            publication: p.id,
+            attempt: p.data.attempt,
+          },
+        );
+        return 'completed-before-stop';
+      }
+      if (p.data.dispatchAuthorized !== false) {
+        await tx.put('workflow_run', {
+          ...current,
+          data: {
+            ...current.data,
+            cancellation: { ...cancellation, status: 'awaiting-publication-resolution' },
+          },
+        });
+        return 'awaiting';
+      }
+      const evidence = await this.factory.fact(
+        tx,
+        { user: 'worker', human: false },
+        item,
+        'publication.evidence',
+        {
+          activity: p.id,
+          run,
+          attempt: p.data.attempt,
+          contentDigest: digest(publicationContent(p)),
+          matches: [],
+          complete: true,
+          noDispatch: p.data.dispatchAuthorized === false,
+          cancelledBeforeDispatch: true,
+        },
+      );
+      const status = p.data.status === 'skipped' ? 'skipped' : 'not-published';
+      await publicationState(tx, p, status, { evidence: evidence.id, error: undefined });
+      const confirmedAt = Date.now();
+      await tx.put('workflow_run', {
+        ...current,
+        data: {
+          ...current.data,
+          status: 'cancelled',
+          cancellation: {
+            ...cancellation,
+            status: 'confirmed',
+            confirmedAt,
+            evidence: { providerOutcome: 'not-published', evidence: evidence.id },
+          },
+        },
+      });
+      await this.factory.fact(
+        tx,
+        { user: 'worker', human: false },
+        item,
+        'publication.cancelled-before-dispatch',
+        {
+          run,
+          activity: p.id,
+          attempt: p.data.attempt,
+          evidence: evidence.id,
+        },
+      );
+      await this.factory.fact(
+        tx,
+        { user: 'worker', human: false },
+        item,
+        'workflow.cancellation-confirmed',
+        {
+          run,
+          request: cancellation.request,
+          publication: p.id,
+          attempt: p.data.attempt,
+          evidenceFact: evidence.id,
+          confirmedStopped: true,
+          evidence: { providerOutcome: 'not-published', evidence: evidence.id },
+        },
+      );
+      return 'confirmed';
+    });
+  }
+  async process(run: string, signal?: AbortSignal) {
     const claimed = await this.store.transaction(async (tx) => {
       const p = await this.current(tx, run);
       if (!['queued', 'reconciliation-queued'].includes(p.data.status)) return;
       const reconciliation = p.data.status === 'reconciliation-queued';
+      const workflowRun = (await tx.get('workflow_run', run)) as Run;
+      if (
+        workflowRun.data.cancellation &&
+        ['requested', 'awaiting-publication-resolution'].includes(
+          workflowRun.data.cancellation.status,
+        ) &&
+        !reconciliation
+      )
+        return;
       const item = (await tx.get('work_item', p.workItem))!;
       if (reconciliation) {
         try {
@@ -226,48 +351,53 @@ export class PublicationWorker {
     }
     let effect;
     try {
-      effect = await this.provider.publish(p.data.destination, key!, content, () =>
-        this.store.transaction(async (tx) => {
-          const current = await this.owned(tx, p.id, p.data.token);
-          if (current.data.status !== 'dispatching') fail(409, 'Publication ownership lost');
-          try {
-            await publicationReady(tx, current);
-            if (current.data.reference) {
-              const item = (await tx.get('work_item', p.workItem))!;
-              const share = await activeShare(tx, item, current.data.reference);
-              const artifact = await tx.get('publication_artifact', share.data.contentVersion);
-              if (!artifact || !this.artifacts) fail(503, 'Artifact content unavailable');
-              await this.artifacts.verify(artifact.data as any);
-              // Serialize dispatch authorization with revocation and activation.
-              await tx.put('artifact_share', {
-                ...share,
-                data: { ...share.data, dispatches: (share.data.dispatches ?? 0) + 1 },
+      effect = await this.provider.publish(
+        p.data.destination,
+        key!,
+        content,
+        () =>
+          this.store.transaction(async (tx) => {
+            const current = await this.owned(tx, p.id, p.data.token);
+            if (current.data.status !== 'dispatching') fail(409, 'Publication ownership lost');
+            try {
+              await publicationReady(tx, current);
+              if (current.data.reference) {
+                const item = (await tx.get('work_item', p.workItem))!;
+                const share = await activeShare(tx, item, current.data.reference);
+                const artifact = await tx.get('publication_artifact', share.data.contentVersion);
+                if (!artifact || !this.artifacts) fail(503, 'Artifact content unavailable');
+                await this.artifacts.verify(artifact.data as any);
+                // Serialize dispatch authorization with revocation and activation.
+                await tx.put('artifact_share', {
+                  ...share,
+                  data: { ...share.data, dispatches: (share.data.dispatches ?? 0) + 1 },
+                });
+              }
+              const credential = await this.secrets.readInTransaction(
+                tx,
+                p.organization,
+                publicationPurpose(p.data.destination.credential),
+              );
+              await tx.put('external_activity', {
+                ...current,
+                data: { ...current.data, dispatchAuthorized: true },
               });
+              const item = (await tx.get('work_item', p.workItem))!;
+              await this.factory.fact(
+                tx,
+                { user: p.data.identity.user, human: false },
+                item,
+                'publication.dispatch-authorized',
+                { activity: p.id, run: p.run, attempt: p.data.attempt },
+              );
+              return credential;
+            } catch {
+              throw new PublicationDispatchBlocked(
+                'Publication inputs, credentials or execution authority changed before dispatch',
+              );
             }
-            const credential = await this.secrets.readInTransaction(
-              tx,
-              p.organization,
-              publicationPurpose(p.data.destination.credential),
-            );
-            await tx.put('external_activity', {
-              ...current,
-              data: { ...current.data, dispatchAuthorized: true },
-            });
-            const item = (await tx.get('work_item', p.workItem))!;
-            await this.factory.fact(
-              tx,
-              { user: p.data.identity.user, human: false },
-              item,
-              'publication.dispatch-authorized',
-              { activity: p.id, run: p.run, attempt: p.data.attempt },
-            );
-            return credential;
-          } catch {
-            throw new PublicationDispatchBlocked(
-              'Publication inputs, credentials or execution authority changed before dispatch',
-            );
-          }
-        }),
+          }),
+        signal,
       );
     } catch (error) {
       await this.store.transaction(async (tx) => {
@@ -306,6 +436,33 @@ export class PublicationWorker {
       if (current.data.status !== 'dispatching') fail(409, 'Publication ownership lost');
       const item = (await tx.get('work_item', p.workItem))!;
       await publicationState(tx, current, 'completed', { effect, effects: [effect] });
+      const run = (await tx.get('workflow_run', p.run)) as Run;
+      if (
+        run.data.cancellation &&
+        ['requested', 'awaiting-publication-resolution'].includes(run.data.cancellation.status)
+      ) {
+        const cancellation = {
+          ...run.data.cancellation,
+          status: 'completed-before-stop' as const,
+          confirmedAt: Date.now(),
+          evidence: { providerOutcome: 'completed', effect },
+        };
+        await tx.put('workflow_run', { ...run, data: { ...run.data, cancellation } });
+        await this.factory.fact(
+          tx,
+          { user: 'worker', human: false },
+          item,
+          'workflow.cancellation-not-applied',
+          {
+            run: p.run,
+            request: cancellation.request,
+            reason: 'Publication completed before the cancellation request could stop it',
+            publication: p.id,
+            attempt: p.data.attempt,
+            effect,
+          },
+        );
+      }
       await this.factory.fact(
         tx,
         { user: p.data.identity.user, human: false },

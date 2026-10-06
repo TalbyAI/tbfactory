@@ -104,6 +104,8 @@ function route(url: URL, method: string): Operation {
       return { ...base, resource: p[4], action: 'review.approve' };
     if (p.length === 6 && p[5] === 'review-supersession' && method === 'POST')
       return { ...base, resource: p[4], action: 'review.supersede' };
+    if (p.length === 6 && p[5] === 'workflow-cancellations' && method === 'POST')
+      return { ...base, resource: p[4], action: 'review.cancel' };
     if (p.length === 6 && p[5] === 'transition-requests' && ['GET', 'POST'].includes(method))
       return {
         ...base,

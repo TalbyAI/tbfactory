@@ -109,6 +109,7 @@ const inputSchemas: Record<string, z.ZodType> = {
   'review.facts': reviewFactsSchema,
   'review.approve': reviewActionSchema,
   'review.supersede': reviewActionSchema,
+  'review.cancel': reviewActionSchema,
   'review.decide': reviewDecisionSchema,
   'type.manage': selectionSchema,
   'team.manage': teamSchema,

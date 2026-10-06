@@ -157,6 +157,7 @@ export class ReviewWorker {
       const run = (await tx.get('workflow_run', id)) as Run;
       const item = (await tx.get('work_item', run.workItem))!;
       if ((item.activeRun as any)?.id !== run.id) fail(409, 'Review ownership lost');
+      if (this.cancellationPending(run)) return false;
       const decision = run.data.decision && (await tx.get('fact', run.data.decision));
       if (!decision || !(await decisionUsable(tx, item, run, decision))) {
         const status = 'waiting-revalidation';
@@ -286,7 +287,10 @@ export class ReviewWorker {
       await this.storage.init();
       const runs = (await this.store.transaction((tx) => tx.list('workflow_run'))) as Run[];
       for (const run of runs) {
-        if (['completed', 'superseded', 'stopped'].includes(run.data.status)) continue;
+        if (
+          ['completed', 'superseded', 'stopped', 'cancelled', 'rejected'].includes(run.data.status)
+        )
+          continue;
         if (run.data.status.startsWith('publication-')) {
           await this.publications.recoverInterrupted(run.id);
           continue;
@@ -357,12 +361,121 @@ export class ReviewWorker {
         await tx.remove('worker_owner', 'review');
     });
   }
+  private cancellationPending(run: Run) {
+    return ['requested', 'awaiting-publication-resolution'].includes(
+      run.data.cancellation?.status ?? '',
+    );
+  }
+  /** Finalization calls this after its Workflow step returns cancellation-pending. */
+  async confirmRequestedCancellation(id: string, executionStopped = false) {
+    let run = (await this.store.transaction((tx) => tx.get('workflow_run', id))) as Run | undefined;
+    if (!run || !this.cancellationPending(run)) return true;
+    if (!executionStopped && this.running.has(id)) {
+      this.controllers.get(id)?.abort(new Error('Workflow cancellation requested'));
+      return false;
+    }
+    if (!executionStopped && run.data.status === 'recovery-required') return false;
+    if (
+      [
+        'waiting-inputs',
+        'waiting-review',
+        'review-submitted',
+        'waiting-revalidation',
+        'waiting-authorization',
+      ].includes(run.data.status)
+    ) {
+      try {
+        const workflow = this.workflows[run.data.workflow];
+        const snapshot = workflow && (await workflow.getWorkflowRunById(id));
+        if (!snapshot || snapshot.status !== 'suspended')
+          throw Error('Suspended snapshot unavailable');
+      } catch {
+        await this.update(
+          id,
+          'recovery-required',
+          'Suspended Workflow snapshot unavailable for cancellation',
+        );
+        return false;
+      }
+    }
+    if (run.data.status.startsWith('publication-')) {
+      const outcome = await this.publications.cancelRequested(id);
+      return outcome === 'confirmed' || outcome === 'completed-before-stop';
+    }
+    let sandboxStopped = false;
+    try {
+      if (
+        run.data.workflow !== 'review-intake-v1' &&
+        (run.data.sandbox ||
+          ['running', 'recovery-required'].includes(run.data.status) ||
+          run.data.report)
+      ) {
+        await confirmSandboxStopped(run);
+        sandboxStopped = true;
+      }
+    } catch {
+      await this.update(
+        id,
+        'recovery-required',
+        'Cancellation is waiting for confirmed execution stop',
+      );
+      return false;
+    }
+    return this.store.transaction(async (tx) => {
+      if (((await tx.get('worker_owner', 'review'))?.data as any)?.owner !== this.owner)
+        fail(409, 'Worker ownership lost');
+      const current = (await tx.get('workflow_run', id)) as Run;
+      if (!this.cancellationPending(current)) return true;
+      if (current.data.status.startsWith('publication-')) return false;
+      const item = await tx.get('work_item', current.workItem);
+      if (!item || (item.activeRun as any)?.id !== id) fail(409, 'Cancellation ownership lost');
+      const cancellation = {
+        ...current.data.cancellation!,
+        status: 'confirmed' as const,
+        confirmedAt: Date.now(),
+        evidence: { executionStopped: true, sandboxStopped },
+      };
+      await tx.put('workflow_run', {
+        ...current,
+        data: {
+          ...current.data,
+          status: 'cancelled',
+          cancellation,
+          executionMs:
+            current.data.executionMs +
+            (current.data.activeSince ? Date.now() - current.data.activeSince : 0),
+          activeSince: undefined,
+          error: undefined,
+        },
+      });
+      await tx.put('work_item', { ...item, activeRun: undefined });
+      const factId = digest(`workflow-cancellation-confirmed:${id}:${cancellation.request}`);
+      if (!(await tx.get('fact', factId)))
+        await tx.create('fact', {
+          id: factId,
+          organization: current.organization,
+          workItem: current.workItem,
+          actor: 'worker',
+          kind: 'workflow.cancellation-confirmed',
+          recordedAt: cancellation.confirmedAt,
+          payload: {
+            run: id,
+            request: cancellation.request,
+            confirmedStopped: true,
+            evidence: cancellation.evidence,
+          },
+        });
+      return true;
+    });
+  }
   private async update(id: string, status: string, error?: string) {
     return this.store.transaction(async (tx) => {
       if (((await tx.get('worker_owner', 'review'))?.data as any)?.owner !== this.owner)
         fail(409, 'Worker ownership lost');
       const run = (await tx.get('workflow_run', id)) as Run;
-      if (['completed', 'superseded', 'stopped'].includes(run.data.status)) return run;
+      if (['completed', 'superseded', 'stopped', 'cancelled', 'rejected'].includes(run.data.status))
+        return run;
+      if (this.cancellationPending(run) && status !== 'recovery-required') return run;
       const data = { ...run.data, status, ...(error ? { error } : {}) };
       const updated = { ...run, data };
       await tx.put('workflow_run', updated);
@@ -376,6 +489,7 @@ export class ReviewWorker {
     await this.store.transaction(async (tx) => {
       const intake = (await tx.get('workflow_run', id)) as Run;
       if (intake.data.handoff) return;
+      if (this.cancellationPending(intake)) return;
       const item = (await tx.get('work_item', intake.workItem))!;
       if ((item.activeRun as any)?.id !== id) fail(409, 'Intake ownership lost');
       const inputs = await relevantFacts(tx, item);
@@ -495,13 +609,14 @@ export class ReviewWorker {
   private async generate(id: string) {
     let run = await this.store.transaction(async (tx) => {
       const run = (await tx.get('workflow_run', id)) as Run;
+      if (this.cancellationPending(run)) return run;
       if (run.data.report) return run;
       if (run.data.status !== 'queued') fail(409, 'Workflow cannot dispatch');
       const updated = { ...run, data: { ...run.data, status: 'running', activeSince: Date.now() } };
       await tx.put('workflow_run', updated);
       return updated;
     });
-    if (run.data.report) return;
+    if (this.cancellationPending(run) || run.data.report) return;
     if (run.data.preparedReport) {
       try {
         await this.publishPrepared(run);
@@ -511,13 +626,12 @@ export class ReviewWorker {
         throw e;
       }
     }
-    const controller = new AbortController();
+    const controller = this.controllers.get(id) ?? new AbortController();
     let sandbox: RepositorySandbox | undefined;
     let agent: ReviewAgent | undefined;
     let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
       sandbox = new RepositorySandbox(run, this.settings.image);
-      this.controllers.set(id, controller);
       timeout = setTimeout(
         () => controller.abort(new Error('Execution time limit exhausted')),
         Math.max(1, run.data.config!.limits.executionMs - run.data.executionMs),
@@ -611,8 +725,21 @@ export class ReviewWorker {
       const stopped = await (sandbox ? sandbox.stop() : confirmSandboxStopped(run))
         .then(() => true)
         .catch(() => false);
+      const currentBeforeRecovery = (await this.store.transaction((tx) =>
+        tx.get('workflow_run', id),
+      )) as Run;
+      if (this.cancellationPending(currentBeforeRecovery)) {
+        if (!stopped)
+          await this.update(
+            id,
+            'recovery-required',
+            'Cancellation is waiting for confirmed execution stop',
+          );
+        throw error;
+      }
       await this.store.transaction(async (tx) => {
         const current = (await tx.get('workflow_run', id)) as Run;
+        if (this.cancellationPending(current)) return;
         const data = {
           ...current.data,
           status: stopped && !current.data.preparedReport ? 'stopped' : 'recovery-required',
@@ -635,7 +762,6 @@ export class ReviewWorker {
       throw error;
     } finally {
       clearTimeout(timeout);
-      this.controllers.delete(id);
     }
   }
   private async publishPrepared(run: Run) {
@@ -789,6 +915,9 @@ export class ReviewWorker {
       if (((await tx.get('worker_owner', 'review'))?.data as any)?.owner !== this.owner)
         fail(409, 'Worker ownership lost');
     });
+    const requested = (await this.store.transaction((tx) => tx.list('workflow_run'))) as Run[];
+    for (const run of requested)
+      if (this.cancellationPending(run)) await this.confirmRequestedCancellation(run.id);
     await this.automaticStarts();
     const runs = (await this.store.transaction((tx) => tx.list('workflow_run'))) as Run[];
     for (const run of runs) {
@@ -859,18 +988,38 @@ export class ReviewWorker {
             tx.get('workflow_run', run.id),
           )) as Run;
           if (
-            !['completed', 'superseded', 'stopped', 'recovery-required'].includes(
-              current.data.status,
-            )
+            ![
+              'completed',
+              'superseded',
+              'stopped',
+              'cancelled',
+              'rejected',
+              'recovery-required',
+            ].includes(current.data.status)
           )
             await this.update(run.id, 'waiting-prerequisites', (error as Error).message);
         })
-        .finally(() => this.running.delete(run.id));
+        .finally(async () => {
+          this.running.delete(run.id);
+          this.controllers.delete(run.id);
+          const current = (await this.store.transaction((tx) => tx.get('workflow_run', run.id))) as
+            | Run
+            | undefined;
+          if (current && this.cancellationPending(current))
+            await this.confirmRequestedCancellation(run.id, true);
+        });
       this.running.set(run.id, task);
     }
   }
   private async execute(run: Run) {
-    if (run.data.status.startsWith('publication-')) return this.publications.process(run.id);
+    const controller = new AbortController();
+    this.controllers.set(run.id, controller);
+    const current = (await this.store.transaction((tx) => tx.get('workflow_run', run.id))) as Run;
+    if (run.data.status.startsWith('publication-')) {
+      await this.publications.process(run.id, controller.signal);
+      return;
+    }
+    if (this.cancellationPending(current)) return;
     const workflow = this.workflows[run.data.workflow];
     if (!workflow) {
       await this.update(run.id, 'recovery-required', 'Retained Workflow definition unavailable');
@@ -1006,9 +1155,13 @@ export async function recoverStoppedRun(
           },
         });
       }
+    const cancellationPending =
+      current.data.cancellation &&
+      ['requested', 'awaiting-publication-resolution'].includes(current.data.cancellation.status);
+    const confirmedAt = Date.now();
     const data = {
       ...current.data,
-      status: !uncertain ? 'queued' : 'stopped',
+      status: cancellationPending ? 'cancelled' : !uncertain ? 'queued' : 'stopped',
       delegations: 0,
       aiMs,
       executionMs:
@@ -1016,6 +1169,16 @@ export async function recoverStoppedRun(
         (current.data.activeSince ? Date.now() - current.data.activeSince : 0),
       activeSince: undefined,
       error: 'Interrupted execution confirmed stopped; uncertain model calls were not replayed',
+      ...(cancellationPending
+        ? {
+            cancellation: {
+              ...current.data.cancellation!,
+              status: 'confirmed' as const,
+              confirmedAt,
+              evidence: { executionStopped: true, sandboxStopped: true, uncertainCalls: uncertain },
+            },
+          }
+        : {}),
     };
     await tx.put('workflow_run', { ...current, data });
     const item = await tx.get('work_item', current.workItem);
@@ -1025,6 +1188,24 @@ export async function recoverStoppedRun(
         activeRun:
           data.status === 'queued' ? { id, workflow: data.workflow, status: 'queued' } : undefined,
       });
+    if (cancellationPending) {
+      const factId = digest(`workflow-cancellation-confirmed:${id}:${data.cancellation!.request}`);
+      if (!(await tx.get('fact', factId)))
+        await tx.create('fact', {
+          id: factId,
+          organization: current.organization,
+          workItem: current.workItem,
+          actor: 'operator',
+          kind: 'workflow.cancellation-confirmed',
+          recordedAt: confirmedAt,
+          payload: {
+            run: id,
+            request: data.cancellation!.request,
+            confirmedStopped: true,
+            evidence: data.cancellation!.evidence,
+          },
+        });
+    }
     await tx.create('audit', {
       id: randomUUID(),
       organization: current.organization,
