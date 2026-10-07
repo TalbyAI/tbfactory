@@ -2,6 +2,7 @@
 
 Status: ready-for-agent
 Labels: wayfinder:map
+State: open
 
 ## Destination
 
@@ -17,7 +18,7 @@ Teams need to automate complex work with agents and humans while retaining contr
 
 The Factory must preserve those distinctions across GitHub and Azure DevOps, independent Organizations, long human waits, process restarts, and deployments. Users need a trustworthy history, private Artifacts, and publication that does not silently repeat an external Activity after an uncertain response.
 
-The repository contains the domain glossary, accepted foundations, and ten accepted ADRs. The isolated storage-feasibility investigation has executed checks and recorded its selected provider and dependency pins in the linked ticket. It has no production application implementation. This specification translates the accepted foundation into MVP behavior and acceptance requirements without inventing the detailed designs explicitly reserved for follow-up specifications.
+The repository contains the domain glossary, accepted foundations, and ten accepted ADRs. The isolated storage-feasibility investigation has executed checks and recorded its selected provider and dependency pins in the linked ticket. The application and local installation increments have been delivered; deployment acceptance and a recovery diagnosis remain open. This specification translates the accepted foundation into MVP behavior and acceptance requirements without inventing the detailed designs explicitly reserved for follow-up specifications.
 
 ## Solution
 
@@ -137,9 +138,9 @@ Workflow Runs remain exclusive per Work Item during execution and human waits, r
 - Evaluate the existing Mastra-SurrealDB adapter in an isolated, one-working-day prototype using a disposable database with persistent storage and a pinned, mutually compatible dependency set. The executed result and exact dependency pins belong to the storage-feasibility ticket.
 - Adopt the adapter only if the restart, resume, output-retention, and concurrency checks pass within the timebox. Otherwise select a Mastra-supported provider and record the failed criterion. This policy has been applied in the resolved storage-feasibility ticket indexed below. Substantial custom adapter development is excluded.
 - The adapter result affects Mastra storage only; SurrealDB remains the primary Factory database regardless of that result.
-- The following detailed designs remain unresolved. Their requirements stay within the MVP, and decisions must be recorded before implementation that depends on them:
+- The following areas were identified as required follow-up designs in the initial specification. Their requirements stay within the MVP; linked implementation resolutions below record completed contracts, while deployment acceptance remains open. Any remaining decisions must be recorded before dependent implementation:
 
-| Follow-up area | Decisions still required |
+| Follow-up area | Required design coverage |
 | --- | --- |
 | Adapter prototype | Resolved; use the storage-feasibility ticket's selected provider, pins, and evidence. |
 | Domain persistence and API | Schemas, provider identifiers, duplicate-ingestion mechanism, atomic state/history updates, command contracts, and ownership enforcement. |
@@ -150,6 +151,25 @@ Workflow Runs remain exclusive per Work Item during execution and human waits, r
 | Artifacts and publication | Content/reference versioning, destinations, private sharing, expiry/revocation mechanisms, and retention. |
 
 No concrete endpoints, schema fields, state names, scheduling algorithm, authentication protocol, or sharing mechanism are accepted merely by appearing as an implementation possibility. This specification preserves the accepted ADRs rather than reopening them.
+
+### Accepted operational limits — 2026-10-07
+
+The User confirmed reopening [Issue 12](issues/12-persistent-shared-installation.md)
+and requiring executed manual work and evidence before closing that ticket or this
+specification. Native Node remains a provisional local implementation choice;
+the earlier local-installation approval did not choose the production architecture.
+Temporary backup interruption is accepted for the MVP. Its maintenance window and
+maximum total interruption must be agreed after measurement in the chosen
+environment and before closure.
+
+Restored external observations recorded at or before activation do not automatically
+start new Review Workflows, including legitimate starts whose receipt or Run is
+absent from the recovery point. This is an accepted MVP limitation. Existing Run
+durability, retained human waits, and conservative manual recovery of interrupted
+execution remain required. The broader durability/restart redesign is deferred in
+[Issue 18](issues/18-redesign-durable-recovery.md). The unexplained ownership startup
+failure is tracked in [Issue 17](issues/17-diagnose-worker-ownership-recovery.md) and
+blocks acceptance of the affected recovery scenario.
 
 ## Testing Decisions
 
@@ -173,7 +193,13 @@ No concrete endpoints, schema fields, state names, scheduling algorithm, authent
 
 ## Decisions so far
 
-- [Operate the persistent shared installation](issues/12-persistent-shared-installation.md#resolution--2026-10-06): delivered and verified the approved local web/worker installation, complete recovery bundles, activation holds and isolated restore drills; the final suite passes 179/179. Real deployment, independent recovery destination and measured production RTO remain pending.
+- [Reopen installation acceptance after assumption review](issues/12-persistent-shared-installation.md#reopened-after-assumption-review--2026-10-07): local installation remains delivered; ticket and specification stay open until manual deployment/recovery checks and ownership diagnosis are completed. Node is provisional locally, MVP backup interruption is accepted subject to measured limits, and the broader recovery redesign is deferred.
+
+- [Diagnose worker ownership during crash recovery](issues/17-diagnose-worker-ownership-recovery.md): open MVP acceptance blocker; later passing tests do not explain or correct the original ownership startup failure.
+
+- [Redesign durable recovery beyond the MVP](issues/18-redesign-durable-recovery.md): User-approved post-MVP follow-up for observation recovery and interrupted-run restart design, preserving existing MVP durability and conservative recovery commitments.
+
+- [Local installation delivery](issues/12-persistent-shared-installation.md#resolution--2026-10-06): historical web/worker, recovery-bundle, activation-hold and isolated-drill evidence, including a 179/179 invocation following an unexplained 178/179 ownership failure; the historical closure is superseded by the reopening agreement.
 
 - [Retain definition versions and explicitly migrate Work Items](issues/11-retained-versions-and-explicit-migration.md#resolution--2026-10-06): delivered narrow authorized atomic migrations, unchanged retained lifecycle history and obsolete prior review evidence; eight focused checks and built HTTP/browser/restart acceptance pass.
 
@@ -202,7 +228,43 @@ No concrete endpoints, schema fields, state names, scheduling algorithm, authent
 - [Execute authorized Transition Requests from the Kanban Board and API](issues/03-authorized-transition-requests.md#resolution--2026-10-03): delivered retained state-flow versions, atomic direct transitions, scoped Team policies and durable activity-bound Approval with current authorization rechecks; Workflow execution and explicit migration remain gated by their own issues.
 - [Ingest deduplicated pull request observations from both providers](issues/04-provider-observation-ingestion.md#resolution--2026-10-04): delivered native provider authentication, scoped encrypted sources, atomic correspondence and event deduplication, and immutable observation history; built HTTP/CLI, concurrency, restart and restoration checks pass, with real Workflow ingestion drills assigned to Issues 05 and 12.
 
+## MVP closure checklist
+
+The User confirmed these closure gates on 2026-10-07. This specification remains
+open while deployment is postponed. A list of commands or a passing local suite
+does not substitute for executed installation work.
+
+- [ ] Close [Issue 17](issues/17-diagnose-worker-ownership-recovery.md) with causal
+  diagnosis, correction, and regression evidence while preserving ownership guards.
+- [ ] Execute and record the installation and recovery work in
+  [Issue 12's manual closure checklist](issues/12-persistent-shared-installation.md#manual-work-and-closure-evidence):
+  deployment/supervision/volumes, independent recovery access and root-key custody,
+  actual backup/drill schedules and retention, delivered failure/overdue alerts,
+  measured and agreed interruption/RTO, isolated restore, and existing-Run recovery.
+  Those installation checks are prerequisites for both Issue 12 and this map;
+  neither document requires the other to be closed first.
+- [ ] Record a requirement-to-evidence index covering every mandatory User Story
+  and testing area, using the existing implementation tickets and public API/Board
+  evidence. Confirm required contracts are resolved and that no untracked mandatory
+  work remains. Update stale progress summaries without discarding historical results.
+- [ ] Record applicable build, typecheck, test, formatting, and operational-check
+  results for the accepted application revision, with environment, dates, responsible
+  operator, evidence locations, and any accepted limitations. Controlled provider/AI
+  boundaries remain the agreed repeatable test seam; do not claim provider exactly-once
+  behavior or silently add live provider effects as a closure requirement.
+- [ ] Confirm the explicitly deferred scope stays visible:
+  [Issue 16](issues/16-explicit-manual-provider-correspondence.md) for manual provider
+  correspondence and [Issue 18](issues/18-redesign-durable-recovery.md) for the later
+  recovery redesign. These follow-ups may remain open at MVP closure; they do not
+  defer existing Run durability or the ownership diagnosis.
+- [ ] Append a dated final acceptance and evidence summary to Issue 12 and this map,
+  then mark both closed. Preserve their delivered local evidence and reopening history.
+
 ## Out of Scope
+
+- The broader durable-recovery redesign in Issue 18, including recovery of historical
+  observations that never generated a Run. Current MVP durability and conservative
+  interrupted-execution recovery remain required.
 
 - Contracting and billing UI for platform AI in the initial review increment; Organization entitlement is activated/revoked operationally and consumption is recorded.
 - Additional sandbox backends before local MVP validation; subsequent adoption of Mastra-supported options remains the agreed follow-up direction.
@@ -222,6 +284,6 @@ No concrete endpoints, schema fields, state names, scheduling algorithm, authent
 ## Further Notes
 
 - Source of truth: [accepted foundations](../../docs/foundations.md), [canonical glossary](../../CONTEXT.md), and [accepted ADRs](../../docs/adr/). The foundations record agreement through Q46 on 2026-10-02. All ten ADRs are accepted; no conflicting architecture proposal is introduced here.
-- This is an umbrella MVP specification. Its `ready-for-agent` status is the requested tracker label for the synthesized specification; the Workflow storage decision is complete as recorded in the linked storage-feasibility ticket, while the other listed implementation designs remain open. An agent can use it to derive the required bounded follow-up specifications. Implementation that depends on an unresolved choice must first complete the corresponding design.
+- This is an umbrella MVP specification. Its `ready-for-agent` status is the tracker role; `State: open` records incomplete acceptance. The implementation resolutions above own completed design and behavioral evidence. Issue 12 owns manual deployment acceptance, Issue 17 owns the unresolved recovery diagnosis, and Issues 16 and 18 are explicitly deferred. Any implementation that depends on a remaining unresolved choice must first complete that design.
 - The source's technical investigation was recorded on 2026-10-01. This synthesis does not refresh external documentation. The storage prototype selected LibSQL and validated the selected provider's pinned dependency set recorded in the linked storage-feasibility ticket.
 - Publication to the local issue tracker consists of this specification. No external issue system, additional architecture document, or combined implementation-ticket file is needed.
