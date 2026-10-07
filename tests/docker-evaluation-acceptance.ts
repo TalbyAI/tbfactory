@@ -16,6 +16,7 @@ const boundaryOrigin = process.env.FACTORY_EVALUATION_BOUNDARY_ORIGIN ?? 'http:/
 const composeFile = resolve(repositoryRoot, 'docker/evaluation/compose.yaml');
 const evidenceFile = resolve(repositoryRoot, '.runtime/docker-evaluation/review-acceptance.json');
 const sourceId = 'docker-evaluation';
+const controlledRepositoryUrl = 'http://host.docker.internal:18082/repository.git';
 const sourceSecret = 'docker-evaluation-source-fixture-secret-keep-local-only';
 const alphaAiKey = 'docker-evaluation-alpha-ai-fixture-key';
 const betaAiKey = 'docker-evaluation-beta-ai-fixture-key';
@@ -143,7 +144,7 @@ function repositoryAccess(organization: 'alpha' | 'beta') {
     repository: `${organization}-repo`,
     provider: 'github',
     credential: `docker-evaluation-${organization}-repository`,
-    urls: ['http://host.docker.internal:18082/repository.git'],
+    urls: [controlledRepositoryUrl],
     key: repositoryKey,
     enabled: true,
   };
@@ -183,6 +184,18 @@ async function reviewView(browser: BrowserClient, organization: string, workItem
   return publicJson(browser, `/api/organizations/${organization}/work-items/${workItem}/reviews`);
 }
 
+function currentWaitingReview(view: any) {
+  return view.runs.find((run: any) => {
+    if (run.workflow !== 'review-v1' || run.status !== 'waiting-review') return false;
+    const report = view.reports.find((row: any) => row.run === run.id);
+    return (
+      !!report &&
+      view.runStatus.some((row: any) => row.run === run.id && row.current) &&
+      view.reportStatus.some((row: any) => row.report === report.id && row.current)
+    );
+  });
+}
+
 async function waitForReview(
   browser: BrowserClient,
   organization: string,
@@ -192,7 +205,10 @@ async function waitForReview(
   return waitFor(
     `Review Workflow ${status}`,
     () => reviewView(browser, organization, workItem),
-    (view) => view.runs.some((run: any) => run.workflow === 'review-v1' && run.status === status),
+    (view) =>
+      status === 'waiting-review'
+        ? !!currentWaitingReview(view)
+        : view.runs.some((run: any) => run.workflow === 'review-v1' && run.status === status),
   );
 }
 
@@ -202,21 +218,34 @@ async function requestReview(
   workItem: string,
 ) {
   const base = `/api/organizations/${organization}/work-items/${workItem}`;
-  const prepared = await publicJson(browser, `${base}/transition-requests`, {
-    operationId: `docker-eval-prepare-${workItem}`,
-    transition: 'prepare-review',
-    expectedState: 'registered',
-    version: 4,
-    inputs: {
-      reviewBrief: 'Explore the changed code and inspect the relevant unchanged configuration.',
-    },
-  });
-  assert.equal(prepared.workItem.state, 'ready-for-review');
+  let reviews = await reviewView(browser, organization, workItem);
+  if (currentWaitingReview(reviews)) return reviews;
+
+  const item = await publicJson(browser, base);
+  if (item.state === 'registered') {
+    const prepared = await publicJson(browser, `${base}/transition-requests`, {
+      operationId: `docker-eval-prepare-${workItem}-${randomUUID()}`,
+      transition: 'prepare-review',
+      expectedState: 'registered',
+      version: item.version,
+      inputs: {
+        reviewBrief: 'Explore the changed code and inspect the relevant unchanged configuration.',
+      },
+    });
+    assert.equal(prepared.workItem.state, 'ready-for-review');
+  } else {
+    assert.equal(
+      item.state,
+      'ready-for-review',
+      `Cannot retry the Review Workflow from Work Item state ${item.state}`,
+    );
+  }
+
   const requested = await publicJson(browser, `${base}/transition-requests`, {
-    operationId: `docker-eval-review-${workItem}`,
+    operationId: `docker-eval-review-${workItem}-${randomUUID()}`,
     transition: 'request-review',
     expectedState: 'ready-for-review',
-    version: 4,
+    version: item.version,
     inputs: {
       reviewBrief: 'Explore the changed code and inspect the relevant unchanged configuration.',
     },
@@ -260,6 +289,64 @@ async function importAlphaPullRequest(browser: BrowserClient, metadata: Boundary
   return imported.workItemId as string;
 }
 
+async function existingAlphaPullRequest(browser: BrowserClient) {
+  let cursor: string | null = null;
+  do {
+    const query = new URLSearchParams({ limit: '100' });
+    if (cursor) query.set('cursor', cursor);
+    const page = await publicJson(browser, `/api/organizations/alpha/work-items?${query}`);
+    for (const item of page.items) {
+      if (
+        item.project !== 'alpha-project' ||
+        item.repository !== 'alpha-repo' ||
+        item.type !== 'pull-request-review'
+      )
+        continue;
+      let factsCursor: string | null = null;
+      do {
+        const factsQuery = new URLSearchParams({ limit: '100' });
+        if (factsCursor) factsQuery.set('cursor', factsCursor);
+        const factsPage = await publicJson(
+          browser,
+          `/api/organizations/alpha/work-items/${item.id}/facts?${factsQuery}`,
+        );
+        if (
+          factsPage.items.some(
+            (fact: any) =>
+              fact.kind === 'external.observation' &&
+              fact.payload?.locator === 'https://github.com/example/code/pull/42',
+          )
+        )
+          return String(item.id);
+        factsCursor = factsPage.cursor;
+      } while (factsCursor);
+    }
+    cursor = page.cursor;
+  } while (cursor);
+  return undefined;
+}
+
+async function ensureControlledReviewFacts(
+  browser: BrowserClient,
+  workItem: string,
+  metadata: BoundaryMetadata,
+) {
+  const reviews = await reviewView(browser, 'alpha', workItem);
+  const expected = {
+    sourceBranch: 'feature',
+    targetBranch: 'main',
+    sourceCommit: metadata.sourceCommit,
+    targetCommit: metadata.targetCommit,
+    sourceUrl: controlledRepositoryUrl,
+  };
+  if (Object.entries(expected).every(([name, value]) => reviews.currentInputs?.[name] === value))
+    return;
+  await publicJson(browser, `/api/organizations/alpha/work-items/${workItem}/review-facts`, {
+    operationId: `docker-eval-inputs-alpha-${workItem}-${randomUUID()}`,
+    fields: expected,
+  });
+}
+
 async function createBetaWorkItem(browser: BrowserClient, metadata: BoundaryMetadata) {
   const base = '/api/organizations/beta';
   await publicJson(browser, `${base}/work-item-types`, {
@@ -283,6 +370,7 @@ async function createBetaWorkItem(browser: BrowserClient, metadata: BoundaryMeta
       targetBranch: 'main',
       sourceCommit: metadata.sourceCommit,
       targetCommit: metadata.targetCommit,
+      sourceUrl: controlledRepositoryUrl,
     },
   });
   return workItem;
@@ -308,11 +396,12 @@ async function startHeldReviews() {
     });
 
   const metadata = await boundaryMetadata();
-  const alphaWorkItem = await importAlphaPullRequest(browser, metadata);
+  const alphaWorkItem =
+    (await existingAlphaPullRequest(browser)) ?? (await importAlphaPullRequest(browser, metadata));
+  await ensureControlledReviewFacts(browser, alphaWorkItem, metadata);
   const alphaReviews = await requestReview(browser, 'alpha', alphaWorkItem);
-  const alphaRun = alphaReviews.runs.find(
-    (run: any) => run.workflow === 'review-v1' && run.status === 'waiting-review',
-  );
+  const alphaRun = currentWaitingReview(alphaReviews);
+  assert.ok(alphaRun, 'The alpha Review Workflow must reach a current human wait');
   const alphaReport = alphaReviews.reports.find((report: any) => report.run === alphaRun.id);
   assert.ok(alphaReport, 'The Docker worker must retain a private report at the human wait');
   assert.equal(alphaReport.findings.length, 1);
@@ -336,9 +425,8 @@ async function startHeldReviews() {
 
   const betaWorkItem = await createBetaWorkItem(browser, metadata);
   const betaReviews = await requestReview(browser, 'beta', betaWorkItem);
-  const betaRun = betaReviews.runs.find(
-    (run: any) => run.workflow === 'review-v1' && run.status === 'waiting-review',
-  );
+  const betaRun = currentWaitingReview(betaReviews);
+  assert.ok(betaRun, 'The beta Review Workflow must reach a current human wait');
   const betaReport = betaReviews.reports.find((report: any) => report.run === betaRun.id);
   assert.ok(betaReport, 'The beta Organization must retain its own private report');
   assert.notEqual(betaReport.id, alphaReport.id);
