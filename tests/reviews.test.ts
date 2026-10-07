@@ -14,6 +14,7 @@ import { writeFile, readFile, unlink } from 'node:fs/promises';
 import { putSource } from '../src/server/observations.ts';
 import { sourceInput, observation, delivery } from './support/observations.ts';
 import { handleHttp } from '../src/server/http.ts';
+import { restartTestDatabase } from './support/database-restart.ts';
 
 test('Concurrent review requests retain exclusive intake ownership while new Facts remain admissible', async () => {
   const f = await fixture();
@@ -495,10 +496,7 @@ test('Imported pull requests keep exclusive incomplete intake across worker/data
     assert.deepEqual(intake.notifications[0].fields, ['sourceBranch', 'targetBranch']);
     assert.equal(r.requests.length, 0);
     await r.stopWorker();
-    execFileSync('docker', ['restart', 'tbfactory-acceptance-db'], {
-      windowsHide: true,
-      stdio: 'pipe',
-    });
+    await restartTestDatabase(r.f.config.url);
     await r.startWorker();
     const resumed = await r.wait(path, 'waiting-inputs');
     assert.equal(resumed.runs[0].id, intake.runs[0].id);
@@ -528,10 +526,7 @@ test('Imported pull requests keep exclusive incomplete intake across worker/data
     assert.equal(current.runs.length, 2);
     assert.equal(r.requests.length, calls);
     await r.stopWorker();
-    execFileSync('docker', ['restart', 'tbfactory-acceptance-db'], {
-      windowsHide: true,
-      stdio: 'pipe',
-    });
+    await restartTestDatabase(r.f.config.url);
     await r.startWorker();
     const recovered = await r.wait(path, 'waiting-review');
     assert.equal(recovered.reports[0].id, review.reports[0].id);

@@ -1,5 +1,4 @@
 import { test } from 'node:test';
-import { execFileSync } from 'node:child_process';
 import { recoverWorkerLock } from '../src/server/review-worker';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
@@ -8,6 +7,7 @@ import { setPolicy } from '../src/server/operator';
 import { putPublicationConfiguration } from '../src/server/publication-provider';
 import { putSource as configureSource } from '../src/server/observations';
 import { fixture } from './support/factory';
+import { restartTestDatabase } from './support/database-restart';
 
 test('Cancellation of retained publication without dispatch tracking requires provider evidence and User resolution', async () => {
   const f = await publicationRuntime('github');
@@ -607,10 +607,7 @@ for (const provider of ['github', 'azure-devops'] as const) {
       assert.equal(view.publications[0].status, 'completed');
       assert.equal((await f.r.f.request(f.path)).body.state, 'registered');
       await f.r.stopWorker();
-      execFileSync('docker', ['restart', 'tbfactory-acceptance-db'], {
-        windowsHide: true,
-        stdio: 'pipe',
-      });
+      await restartTestDatabase(f.r.f.config.url);
       await f.r.startWorker();
       assert.equal((await f.act('review-publications')).status, 200);
       assert.equal(f.effects.length, 1);

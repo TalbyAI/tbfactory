@@ -10,6 +10,7 @@ import { KeyRing } from '../src/server/key-ring';
 import { OrganizationSecrets } from '../src/server/secrets';
 import { selfHostedProvider, BrowserClient } from './support/provider';
 import { sourceInput, observation, delivery } from './support/observations';
+import { restartTestDatabase } from './support/database-restart';
 
 const origin = 'http://localhost:3000';
 const directory = resolve('.runtime', `acceptance-${Date.now()}`);
@@ -314,10 +315,7 @@ try {
   const compatibleRing = await ring.export();
   await stopWeb();
   await store.close();
-  execFileSync('docker', ['restart', 'tbfactory-acceptance-db'], {
-    windowsHide: true,
-    stdio: 'pipe',
-  });
+  await restartTestDatabase(config.url);
   for (let i = 0; i < 100; i++) {
     try {
       if ((await fetch('http://127.0.0.1:18000/health')).ok) break;
