@@ -196,6 +196,8 @@ deployment-specific restart and recovery checks.
 
 ## Decisions so far
 
+- [Docker evaluation on the current PC](designs/docker-evaluation.md): the User selected Docker for the Factory and dependencies, acts as operator, and chose a Docker backup volume and SMTP4Dev mock inbox. Execute the evaluation checks and measure operational limits; same-host results do not establish recovery after host loss or real deployment readiness.
+
 - [Reopen installation acceptance after assumption review](issues/12-persistent-shared-installation.md#reopened-after-assumption-review--2026-10-07): local installation remains delivered; ticket and specification stay open until manual deployment/recovery checks are completed. Node is provisional locally, MVP backup interruption is accepted subject to measured limits, and the broader recovery redesign is deferred.
 
 - [Worker ownership diagnostic disposition](issues/17-diagnose-worker-ownership-recovery.md#user-directed-suspension--2026-10-07): open with `Status: needs-info` and `suspended` label because the reported conditions cannot currently be reproduced. The original cause remains unknown; no correction is claimed. It is not a current blocker. Preserve ownership protections and complete Issue 12's installation-specific restart and recovery checks.

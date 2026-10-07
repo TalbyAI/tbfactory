@@ -2,6 +2,7 @@
 
 Status: ready-for-human
 Type: HITL
+Assignee: Codex
 State: open
 User stories covered: 41, 42, 50, 62, 65, 66, 67, 68
 
@@ -94,6 +95,20 @@ recovery custody, alert routing, and acceptance of measured operational limits.
 This record is prepared from the committed contract and historical local evidence.
 It does not select an installation or report deployment acceptance. The operator
 must fill the unresolved values with nonsecret evidence before closure.
+
+### Selected Docker evaluation — 2026-10-07
+
+The User selected Docker on the current PC for the MVP evaluation, including
+SurrealDB and all other dependencies. The User is the installation operator.
+Use a dedicated Docker volume for backup and restore verification, and SMTP4Dev
+as the mock operator inbox. These choices supersede the unresolved selection
+fields below; the remaining rows retain the earlier preparation context.
+
+The [Docker evaluation contract](../designs/docker-evaluation.md) records the
+implementation and verification plan. Same-host volume recovery is the selected
+evaluation scope; independent recovery after host loss remains a prerequisite
+before real deployment and is not claimed by this evaluation. Measure interruption
+and restore time before agreeing their operational limits with the operator.
 
 | Acceptance item | Recorded local value or contract | Required installation value / evidence |
 | --- | --- | --- |
@@ -239,3 +254,11 @@ remain pending. No product suite, deployment, or restore drill was rerun for thi
 documentation preparation. Markdown formatting, formatting checks, and local link
 and heading-anchor checks passed. Issue 12 and the umbrella specification remain
 open, with all deployment and recovery checks still mandatory.
+
+### Docker evaluation implementation started — 2026-10-07
+
+Codex is preparing and executing the User-selected container evaluation on the
+current PC, on `integration/factory-mvp-acceptance`. The User remains the operator.
+Containerization and operational scheduling are separate implementation increments
+under this ticket. The active host, operator, backup target, and mock alert channel
+are selected; execution evidence and measured limits are not yet accepted.
