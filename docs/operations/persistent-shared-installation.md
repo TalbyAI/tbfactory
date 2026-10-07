@@ -154,10 +154,14 @@ and completed results; interrupted execution follows the
 [conservative manual-recovery procedure](durable-private-reviews.md#consumption-and-recovery)
 without automatically replaying uncertain AI/provider effects.
 
-The unresolved ownership startup failure is tracked separately in
-[Issue 17](../../.scratch/factory-mvp/issues/17-diagnose-worker-ownership-recovery.md)
-and blocks acceptance of the affected recovery scenario. Do not treat later
-passing repetitions as a diagnosed correction or bypass a live ownership guard.
+The original worker-ownership startup report remains unexplained. Per the
+User-directed update in
+[Issue 17](../../.scratch/factory-mvp/issues/17-diagnose-worker-ownership-recovery.md),
+the diagnostic is open and suspended with `Status: needs-info` because the
+reporting conditions cannot currently be reproduced; no correction is claimed.
+Keep live-owner and confirmed-stop protections. This status does not replace the
+deployment-specific restart and recovery checks required by
+[Issue 12](../../.scratch/factory-mvp/issues/12-persistent-shared-installation.md).
 
 ```powershell
 npm run installation -- recovery-list

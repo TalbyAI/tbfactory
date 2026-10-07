@@ -25,7 +25,7 @@ Deliver a runnable shared server/container installation with separate TanStack S
 - [x] Provide the smallest runnable behavioral and operational checks covering the installation and the specification's restart/concurrency scenarios; do not introduce a separate speculative component-test framework or claim production provider exactly-once guarantees.
 
 These checked items retain the delivered local evidence. They do not establish
-deployed operation or resolve the unexplained ownership failure. The remaining
+deployed operation or diagnose the historical ownership report. The remaining
 closure requirements below must be executed, not merely documented.
 
 ## Manual work and closure evidence
@@ -75,20 +75,44 @@ recovery custody, alert routing, and acceptance of measured operational limits.
   duration, and an agreed installation-specific recovery-time objective. Check the
   daily-backup recovery-point objective of at most 24 hours against scheduling and
   failure monitoring. Same-host drill timings are not deployment acceptance.
-- [ ] Resolve [Issue 17](17-diagnose-worker-ownership-recovery.md), link its causal
-  diagnosis and corrective verification, and complete applicable package checks
-  on the accepted revision. Passing repetitions alone do not resolve that issue.
-- [ ] Complete the requirement-to-evidence index and final acceptance summary
-  required by the [specification closure checklist](../spec.md#mvp-closure-checklist).
-  Link each mandatory requirement to its implementation ticket and evidence, then
-  record joint ticket/map closure after the installation checks and other mandatory
-  work pass. Deployment remains pending, so both remain open.
+- [ ] Complete applicable package checks on the accepted revision and record the
+  results with the installation evidence. The suspended diagnostic in
+  [Issue 17](17-diagnose-worker-ownership-recovery.md) has no claimed correction;
+  preserve its ownership guard and historical report. This disposition does not
+  replace the deployment restart and recovery checks above.
+- [x] Prepare the requirement-to-evidence index in the
+  [MVP specification](../spec.md#requirement-to-evidence-index). It records source
+  links and distinguishes historical local evidence from pending installation
+  acceptance.
+- [ ] Revalidate the index against the accepted application revision, append the
+  final installation acceptance record required by the
+  [specification closure checklist](../spec.md#mvp-closure-checklist), and close
+  this ticket and map only after all mandatory installation and recovery checks pass.
+
+## Prepared deployment acceptance record
+
+This record is prepared from the committed contract and historical local evidence.
+It does not select an installation or report deployment acceptance. The operator
+must fill the unresolved values with nonsecret evidence before closure.
+
+| Acceptance item | Recorded local value or contract | Required installation value / evidence |
+| --- | --- | --- |
+| Responsible operator | No operator is recorded. | Name the operator and record execution dates, accepted revision, and evidence location. |
+| Host and deployment shape | Local exercise used separate native Node web/worker processes and Docker for SurrealDB and review sandboxes. Native Node is provisional. | Select the host and deployment shape; record runtime, supervision, network exposure, persistent paths, restricted access, startup order, and second-worker rejection. |
+| Local database endpoint | Historical coordinator evidence records `ws://127.0.0.1:18012/rpc`, namespace `acceptance`; it is an ephemeral local test destination. | Record the chosen installation's nonsecret destination details and host/service restart evidence. |
+| Recovery destination and access | Local recovery used a configurable same-host directory; the bundle excludes the separately held root key. | Name the independent protected destination and recovery access method, and prove retrieval after active-host loss using separately held compatible root-key material. |
+| Backup and drill schedules | Commands exist for daily backup and monthly restore drill; local code retains all valid recovery points. | Record deployed scheduler configuration, at least 30 daily points, key-ring coverage, root-key version retention, and successful scheduled job evidence. |
+| Alerts and operator response | Local status exposes backup/drill health and overdue state; no alert recipient or delivery is recorded. | Name the responsible recipient/operator, configure delivery, and record exercised failed and overdue backup/drill alerts. |
+| Backup interruption | Temporary backup interruption is accepted for the MVP. The five-minute timeout applies per phase and is not a total interruption limit. | Measure complete backup and service interruption in the chosen environment; record the agreed maximum, maintenance window, service return, and response if exceeded or restart fails. |
+| Recovery point objective | The documented daily-backup target is at most 24 hours. | Verify the deployed schedule and failure monitoring meet that target and record the recovery point. |
+| Restore duration and recovery-time objective | Historical same-host restore drill evidence records `durationMs: 4989`; it is not a production measure. | Record the independent restore duration and agree the installation-specific recovery-time objective with the operator. |
+| Existing-Run recovery | Local checks record retained identities, human waits, explicit restore-hold dispositions, and conservative provider recovery. | Exercise ordinary restart, interrupted-execution recovery, restore hold, ownership, cancellation, and provider reconciliation on the chosen installation; retain unknown AI calls without replay. |
+| Ownership diagnostic | The first historical full-suite invocation reported one startup error; later repetitions and the final suite passed without a causal diagnosis or correction. [Issue 17](17-diagnose-worker-ownership-recovery.md) is open with `needs-info` status and `suspended` label. | Preserve all ownership protections. This diagnostic is not a current blocker; the installation-specific ownership and confirmed-stop checks above remain required. |
 
 ## Blocked by
 
 - [Issue 08: Publish an explicitly shared, limited report Artifact](08-limited-report-artifact-sharing.md)
 - [Issue 11: Retain definition versions and explicitly migrate Work Items](11-retained-versions-and-explicit-migration.md)
-- [Issue 17: Diagnose worker ownership during crash recovery](17-diagnose-worker-ownership-recovery.md)
 
 ## Comments
 
@@ -191,3 +215,27 @@ limitation and deferred the broader recovery redesign to Issue 18. Existing Work
 Run durability, retained human waits, and manual recovery of interrupted execution
 remain mandatory. The original ownership startup failure is tracked in Issue 17
 and blocks recovery acceptance until causally diagnosed and corrected.
+
+### User-directed Issue 17 suspension — 2026-10-07
+
+The User directed that Issue 17 be suspended because the reported failure's
+conditions cannot be reproduced. Issue 17 remains open with `Status: needs-info` and
+the `suspended` label. Its cause remains unknown and no correction is claimed. It is
+not a current blocker for Issue 12 or the MVP map. Keep the live-owner and
+confirmed-stop protections. The deployment-specific restart, interrupted-run,
+restore-hold, ownership, cancellation, and provider-reconciliation checks in this
+ticket remain open and mandatory.
+
+### Acceptance preparation — 2026-10-07
+
+Prepared the [requirement-to-evidence index](../spec.md#requirement-to-evidence-index)
+for all 70 User Stories and the accepted testing areas, and added the prepared
+deployment acceptance record above. The index traces ticket metadata to existing
+design, test, documentation, and evidence sources; this is traceability, not a
+fresh product acceptance run. The responsible installation operator remains
+unassigned, and the host, deployment shape, independent recovery destination,
+alert route, interruption limit, and installation-specific recovery-time objective
+remain pending. No product suite, deployment, or restore drill was rerun for this
+documentation preparation. Markdown formatting, formatting checks, and local link
+and heading-anchor checks passed. Issue 12 and the umbrella specification remain
+open, with all deployment and recovery checks still mandatory.

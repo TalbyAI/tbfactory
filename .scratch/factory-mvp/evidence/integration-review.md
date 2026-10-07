@@ -48,8 +48,18 @@ resolved. The two axes remain separate; no findings remain outstanding.
 
 The result above describes those two review findings. It does not resolve the
 separate ownership startup failure recorded in the first complete suite.
-[Issue 17](../issues/17-diagnose-worker-ownership-recovery.md) tracks causal diagnosis
-and correction; affected recovery acceptance remains pending.
+At the time of this review, [Issue 17](../issues/17-diagnose-worker-ownership-recovery.md)
+tracked causal diagnosis and correction; affected recovery acceptance remained
+pending.
+
+### Current diagnostic disposition — 2026-10-07
+
+The User subsequently directed suspension of Issue 17 because the reported
+conditions cannot currently be reproduced. Issue 17 remains open with
+`Status: needs-info` and a `suspended` label; its cause remains unknown and no
+correction is claimed. It is not a current blocker for Issue 12 or MVP closure.
+Preserve ownership protections. Issue 12's deployment-specific restart and
+recovery acceptance remains mandatory and pending.
 
 The User confirmed [reopening Issue 12](../issues/12-persistent-shared-installation.md#reopened-after-assumption-review--2026-10-07)
 with executed manual deployment/recovery work required for ticket and specification
