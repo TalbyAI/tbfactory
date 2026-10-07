@@ -43,3 +43,15 @@ RTO remain pending. The final full-suite and Board installation gate is recorded
 
 Standards: one Low judgement call, resolved. Spec: one P1 recovery regression,
 resolved. The two axes remain separate; no findings remain outstanding.
+
+## Subsequent acceptance review — 2026-10-07
+
+The result above describes those two review findings. It does not resolve the
+separate ownership startup failure recorded in the first complete suite.
+[Issue 17](../issues/17-diagnose-worker-ownership-recovery.md) tracks causal diagnosis
+and correction; affected recovery acceptance remains pending.
+
+The User confirmed [reopening Issue 12](../issues/12-persistent-shared-installation.md#reopened-after-assumption-review--2026-10-07)
+with executed manual deployment/recovery work required for ticket and specification
+closure. The local implementation remains delivered, but the earlier scope reduction
+and later passing suite do not establish full operational acceptance.

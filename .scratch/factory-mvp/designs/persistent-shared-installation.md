@@ -8,6 +8,11 @@ definition contracts.
 
 ## Local installation shape
 
+The User confirmed on 2026-10-07 that native Node remains a provisional local
+implementation choice. The earlier approval selected local verification, not
+this production architecture. Deployment shape and host supervision remain
+explicit work in [Issue 12](../issues/12-persistent-shared-installation.md).
+
 The locally verifiable installation runs the built TanStack Start web server and
 one Mastra worker as separate native Node processes. Docker runs the pinned
 SurrealDB service and the per-run review sandbox. Both application processes use
@@ -52,6 +57,13 @@ measured installation-specific recovery-time objective before deployment.
   stop cleanly, keep the installation stopped for operator recovery.
 
 ## Recovery bundle
+
+Temporary backup interruption is accepted for the MVP. Agree a maintenance
+window, measure complete backup duration and web/worker interruption through
+service return, and agree a maximum total interruption in the chosen environment
+before Issue 12 closes. The default five-minute backup timeout applies per phase;
+it is not an enforced deadline for total interruption. Failed return to service
+or an exceeded operational limit requires the documented operator response.
 
 A complete bundle contains:
 
@@ -114,6 +126,15 @@ observation recorded at or before activation, even if an older recovery point
 contains the Fact but lacks a later receipt. Observations recorded after activation
 remain eligible under the existing rules, including ownership and deduplication.
 
+The User accepted this omission as an MVP limitation on 2026-10-07. The hold
+ledger and `recovery-list` cover existing Runs, not observations that lack a Run;
+legitimate unexecuted starts may therefore remain unperformed. The broader
+durability/restart redesign is deferred in
+[Issue 18](../issues/18-redesign-durable-recovery.md). This does not defer ordinary
+Run durability, retained human waits, or conservative manual recovery of
+interrupted execution. Unknown AI outcomes and uncertain publication are not
+automatically replayed.
+
 A clean backup must contain no `worker_owner` row or `worker.lock`. Do not
 transplant a source host's worker lock into restored paths or automatically clear
 a live owner. A crash-point image with ownership markers stays held until the
@@ -121,6 +142,12 @@ operator confirms the old process and sandbox cannot act and completes the
 existing host/path-bound recovery procedure.
 
 ## Explicitly pending deployment decisions
+
+Issue 12 and the umbrella specification remain open until their manual work and
+verification have actually been performed. The ownership startup failure also
+remains an acceptance blocker in
+[Issue 17](../issues/17-diagnose-worker-ownership-recovery.md); successful later
+test invocations did not establish its cause or correction.
 
 The local acceptance path does not choose or prove a production off-host recovery
 destination, its access policy, a measured installation-specific recovery-time
