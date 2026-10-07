@@ -3,7 +3,7 @@ import { generateKeyPair, exportJWK, SignJWT } from 'jose';
 import { createHash, randomUUID } from 'node:crypto';
 
 // Controlled external OIDC boundary. The production application has no test login.
-export async function startOidc(port = 0) {
+export async function startOidc(port = 0, bindHost = '127.0.0.1') {
   let issuer = `http://127.0.0.1:${port}`;
   const { privateKey, publicKey } = await generateKeyPair('RS256');
   const jwk = { ...(await exportJWK(publicKey)), kid: 'test', alg: 'RS256', use: 'sig' };
@@ -114,7 +114,7 @@ export async function startOidc(port = 0) {
       res.end('{}');
     }
   });
-  await new Promise<void>((resolve) => server.listen(port, '127.0.0.1', resolve));
+  await new Promise<void>((resolve) => server.listen(port, bindHost, resolve));
   issuer = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
   return {
     issuer,
