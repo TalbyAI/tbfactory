@@ -97,3 +97,67 @@ A possible decision checkpoint declared by a Work Item Type within its Work Item
 
 **Approval**:
 A decision by an authorized participant at an Approval Point, tied to the relevant evidence and input versions. Approval authority is separate from execution authority and does not grant a missing permission or override a prohibition.
+
+## Post-MVP exploration language
+
+The following terms describe the agreed direction of the post-MVP exploration.
+They do not change the accepted MVP definitions or authorize implementation.
+The [post-MVP model proposal](.scratch/post-mvp-factory-model/proposal.md) records
+the context and the [decision map](.scratch/post-mvp-factory-model/spec.md) tracks
+the unresolved contracts.
+
+**Element (post-MVP)**:
+An Organization-owned object in the Factory graph with a stable identity
+independent of its types and any external representation. An Element can carry
+multiple descriptive types and the Resource and Work Item roles under one identity.
+
+**Assertion**:
+An immutable subject-predicate-object assertion with statement-specific attribution
+and temporal metadata; any local identity is scoped to its containing Assertion
+Bundle for references from other Assertions in that same Bundle. It has no global
+identity and does not itself establish current truth or authorize a Factory State
+Transition.
+_Avoid_: Fact as a synonym in the post-MVP model; Fact retains its MVP meaning.
+
+**Assertion Bundle**:
+An identified grouping of Assertions with shared receipt and provenance metadata,
+which can be represented as a graph. It can describe multiple Elements within one
+Organization and aggregate results from several integration queries.
+_Avoid_: Fact Bundle, Fact Commit, or Event as parallel names for this concept.
+
+**Resource**:
+A Factory representation of an object or work context, such as an Organization,
+Project, person, Repository, or Branch. Resource is a role of an Element, sharing
+its identity and Assertion history with the Work Item role when both apply; the role
+does not itself imply exclusive access.
+
+**Work Item (post-MVP)**:
+The role of an element on which the Factory performs work. The same element can
+also be a Resource and carry multiple descriptive types, accumulating external
+observations and processing Assertions under one identity while keeping external state
+and Factory state distinct; only its Organization is required, and Project or
+Repository associations can be established later.
+_Avoid_: Factory Item as a parallel name.
+
+**Comment (post-MVP)**:
+An Element representing a comment, with its own Factory identity even when no
+external representation is known. Export through an integration can establish an
+external representation whose identifier is recorded as an Assertion about the same
+local Comment.
+
+**Resource Claim**:
+A Workflow Run's declared intention to access a specific Resource with an access
+mode, including shared reading or exclusive modification. Compatibility concerns
+the intended access even when the run ultimately makes no modification.
+
+**Trigger**:
+A configured mechanism that uses rule evaluation results to request the start of
+a Workflow Run for a Work Item. Eligibility is distinct from authorization and
+successful acquisition of the required claims.
+_Avoid_: Port for this domain concept; Port names an architectural contract.
+
+**Factory Plugin**:
+An installation-loaded extension supplied by the hosting TypeScript project or a
+package, which contributes capabilities available for declarative composition in
+the Factory. A User's declarative configuration is distinct from loading a Factory
+Plugin's executable code.
