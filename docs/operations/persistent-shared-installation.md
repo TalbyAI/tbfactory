@@ -1,17 +1,22 @@
 # Persistent shared installation operations
 
-This runbook describes the local native Node installation delivered for Issue 12.
-It runs the built TanStack Start web server and one Mastra worker as separate Node
-processes. Docker runs SurrealDB and review sandbox containers. The local recovery
-directory exercises backup and restore on one host; production still requires an
-independent protected recovery destination and a measured installation-specific
-recovery-time objective.
+The User selected Docker on the current Windows PC for the MVP evaluation on
+2026-10-07 and is its operator. The [Docker evaluation runbook](../../docker/evaluation/README.md)
+provides the runnable Compose installation, loopback application and mock inbox
+addresses, persistent volumes, and container commands. The Factory container runs
+the built TanStack Start web server and one Mastra worker as separate processes;
+SurrealDB, controlled OIDC/provider/AI boundaries, SMTP4Dev, and the operational
+scheduler run in their own containers. LibSQL remains the worker's embedded
+Workflow storage inside its persistent volume.
 
-Native Node is a provisional choice for local verification, confirmed as such by
-the User on 2026-10-07. Choose the deployment shape explicitly before operational
-acceptance. [Issue 12](../../.scratch/factory-mvp/issues/12-persistent-shared-installation.md#manual-work-and-closure-evidence)
-is reopened and records the manual work and evidence required for closure; this
-runbook and prior local checks do not establish that those jobs are deployed.
+The dedicated Docker recovery volume and separately mounted root-key volume
+exercise backup and restore on this host. Independent recovery after losing the
+PC remains required before real deployment. The native Node commands below retain
+the underlying operational contract and historical local procedure.
+[Issue 12](../../.scratch/factory-mvp/issues/12-persistent-shared-installation.md#manual-work-and-closure-evidence)
+records the selected environment, executed acceptance evidence, and remaining
+operator decisions. Prior local checks and a runnable command do not establish
+that a job was deployed or accepted.
 
 ## Configure and start
 
