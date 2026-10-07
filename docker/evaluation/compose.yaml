@@ -111,17 +111,9 @@ services:
       root-key-bootstrap:
         condition: service_completed_successfully
     healthcheck:
-      test:
-        - CMD
-        - node
-        - --input-type=module
-        - -e
-        - >-
-          fetch('http://127.0.0.1:18030/api/organizations')
-          .then((response) => process.exit(response.status === 401 ? 0 : 1))
-          .catch(() => process.exit(1))
+      test: ["CMD", "node", "docker/evaluation/scripts/factory-health.mjs"]
       interval: 5s
-      timeout: 3s
+      timeout: 5s
       retries: 24
       start_period: 15s
 

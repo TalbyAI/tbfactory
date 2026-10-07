@@ -11,6 +11,9 @@ const defaultRetryMs = 5 * 60 * 1000;
 
 type Status = {
   coordinator: 'running' | 'stopped';
+  web?: boolean;
+  worker?: boolean;
+  restoreHold?: { activated: boolean; pendingRuns: number };
   backup: { state?: string; overdue: boolean; startedAt?: number; completedAt?: number };
   drill: { state?: string; overdue: boolean; startedAt?: number; completedAt?: number };
 };
@@ -21,12 +24,14 @@ type IncidentRecord = {
   deliveredAt?: number;
   resolvedAt?: number;
   deliveryFailures?: number;
+  details?: string;
 };
 
 type JobReceipt = {
   state: 'running' | 'succeeded' | 'failed';
   startedAt: number;
   completedAt?: number;
+  durationMs?: number;
 };
 
 type SchedulerState = {
@@ -36,14 +41,16 @@ type SchedulerState = {
   incidents: Record<string, IncidentRecord>;
 };
 
-type Incident = { key: string; title: string; observedAt?: number };
+type Incident = { key: string; title: string; observedAt?: number; details?: string };
 
 const incidentTitles: Record<string, string> = {
   'backup-failed': 'Backup failed',
   'backup-overdue': 'Backup recovery point is overdue',
+  'backup-window-exceeded': 'Backup exceeded its maximum total duration',
   'drill-failed': 'Restore drill failed',
   'drill-overdue': 'Restore drill is overdue',
   'coordinator-unavailable': 'Installation coordinator is unavailable',
+  'child-service-unavailable': 'Installation web or worker service is unavailable',
   'status-command-failed': 'Installation status could not be read',
   'status-invalid-json': 'Installation status response is invalid',
 };
@@ -108,6 +115,11 @@ async function readInstallationStatus(): Promise<{ status: Status } | { incident
     !value ||
     typeof value !== 'object' ||
     !['running', 'stopped'].includes(String((value as any).coordinator)) ||
+    ((value as any).web !== undefined && typeof (value as any).web !== 'boolean') ||
+    ((value as any).worker !== undefined && typeof (value as any).worker !== 'boolean') ||
+    ((value as any).restoreHold !== undefined &&
+      (!((value as any).restoreHold instanceof Object) ||
+        typeof (value as any).restoreHold.activated !== 'boolean')) ||
     typeof (value as any).backup?.overdue !== 'boolean' ||
     typeof (value as any).drill?.overdue !== 'boolean'
   )
@@ -126,6 +138,8 @@ function incidentsFor(status: Status, now: number, state?: SchedulerState): Inci
       title: incidentTitles['coordinator-unavailable'],
       observedAt: now,
     });
+  const childIncident = childServiceIncident(status);
+  if (childIncident) incidents.push(childIncident);
   if (latestJobState(status.backup, state?.jobs?.backup) === 'failed')
     incidents.push({
       key: 'backup-failed',
@@ -142,6 +156,8 @@ function incidentsFor(status: Status, now: number, state?: SchedulerState): Inci
     });
   if (status.drill.overdue)
     incidents.push({ key: 'drill-overdue', title: incidentTitles['drill-overdue'] });
+  const windowIncident = state ? backupWindowIncident(state, now) : undefined;
+  if (windowIncident) incidents.push(windowIncident);
   return incidents;
 }
 
@@ -159,6 +175,75 @@ function intervalSetting(name: string, fallback: number) {
   if (!Number.isSafeInteger(value) || value < 1)
     throw new Error(`${name} must be a positive number of milliseconds`);
   return value;
+}
+
+function backupMaximumTotalMs() {
+  const raw = process.env.FACTORY_BACKUP_MAX_TOTAL_MS;
+  if (raw === undefined) return undefined;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || !Number.isInteger(value) || value < 1)
+    throw new Error(
+      'FACTORY_BACKUP_MAX_TOTAL_MS must be a positive finite integer number of milliseconds',
+    );
+  return value;
+}
+
+function backupWindowIncident(state: SchedulerState, now: number): Incident | undefined {
+  const maximumMs = backupMaximumTotalMs();
+  if (maximumMs === undefined) return undefined;
+  const receipt = state.jobs?.backup;
+  if (!receipt) return undefined;
+
+  if (receipt.state === 'running') {
+    const elapsedMs = Math.max(0, now - receipt.startedAt);
+    if (elapsedMs < maximumMs) return undefined;
+    return {
+      key: 'backup-window-exceeded',
+      title: incidentTitles['backup-window-exceeded'],
+      observedAt: receipt.startedAt + maximumMs,
+      details: backupWindowDetails(maximumMs, elapsedMs, true),
+    };
+  }
+
+  const durationMs =
+    receipt.durationMs ??
+    (receipt.completedAt === undefined ? undefined : receipt.completedAt - receipt.startedAt);
+  if (durationMs === undefined || durationMs <= maximumMs) return undefined;
+  return {
+    key: 'backup-window-exceeded',
+    title: incidentTitles['backup-window-exceeded'],
+    observedAt: receipt.completedAt,
+    details: backupWindowDetails(maximumMs, durationMs, false),
+  };
+}
+
+function backupWindowDetails(maximumMs: number, measuredMs: number, running: boolean) {
+  return [
+    `Configured maximum total backup duration: ${maximumMs} ms.`,
+    running
+      ? `Measured total backup duration lower bound: at least ${measuredMs} ms; the installation command is still running. Its final scheduler receipt will include the service restart.`
+      : `Measured total backup duration upper bound: ${measuredMs} ms from scheduler start until the installation command completed, including the service restart.`,
+    'This threshold sends an alert and does not cancel the backup operation.',
+    'Recovery response: check coordinator, web, and worker health. Preserve worker ownership and allow the coordinator operation to finish. If a child remains unavailable after the backup completes, restore service through its normal supervisor and confirm status before retrying the backup.',
+  ].join('\n');
+}
+
+function childServiceIncident(status: Status): Incident | undefined {
+  if (status.coordinator !== 'running') return undefined;
+  const unavailable = [status.web === false && 'web', status.worker === false && 'worker'].filter(
+    Boolean,
+  );
+  if (
+    unavailable.length === 0 ||
+    status.backup.state === 'running' ||
+    status.restoreHold?.activated === false
+  )
+    return undefined;
+  return {
+    key: 'child-service-unavailable',
+    title: incidentTitles['child-service-unavailable'],
+    details: `The coordinator reports an unavailable ${unavailable.join(' and ')} process. Inspect protected service logs and restore the child through its normal supervisor. The scheduler does not restart children or clear worker ownership.`,
+  };
 }
 
 function drillDueAt(completedAt: number) {
@@ -235,25 +320,90 @@ async function runInstallationCommand(command: 'backup' | 'drill') {
   });
 }
 
-async function runJob(command: 'backup' | 'drill') {
+function waitTimer(timeoutMs: number) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = Date.now() + timeoutMs;
+  const promise = new Promise<void>((resolveTimer) => {
+    const schedule = () => {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) {
+        resolveTimer();
+        return;
+      }
+      timer = setTimeout(schedule, Math.min(remaining, 2_147_483_647));
+    };
+    schedule();
+  });
+  return { promise, cancel: () => timer && clearTimeout(timer) };
+}
+
+function unresolvedIncidents(state: SchedulerState): Incident[] {
+  return Object.entries(state.incidents).flatMap(([key, record]) =>
+    !record.resolvedAt && incidentTitles[key]
+      ? [
+          {
+            key,
+            title: incidentTitles[key],
+            observedAt: record.firstSeenAt,
+            details: record.details,
+          },
+        ]
+      : [],
+  );
+}
+
+async function runJob(command: 'backup' | 'drill', inheritedIncidents: Incident[] = []) {
+  const maximumBackupTotalMs = command === 'backup' ? backupMaximumTotalMs() : undefined;
   const startedAt = Date.now();
   const state = await readState();
+  const incidentsToPreserve = mergeIncidents(inheritedIncidents, unresolvedIncidents(state));
   state.jobs ??= {};
   state.jobs[command] = { state: 'running', startedAt };
   await writeState(state);
+
+  const execution = runInstallationCommand(command);
+  if (maximumBackupTotalMs !== undefined) {
+    const timer = waitTimer(maximumBackupTotalMs);
+    try {
+      const exceeded = await Promise.race([
+        execution.then(
+          () => false,
+          () => false,
+        ),
+        timer.promise.then(() => true),
+      ]);
+      if (exceeded) {
+        try {
+          const runningState = await readState();
+          const windowIncident = backupWindowIncident(runningState, Date.now());
+          if (windowIncident)
+            await updateAlerts(mergeIncidents(incidentsToPreserve, [windowIncident]));
+        } catch {
+          console.error(
+            'Backup window alert could not be recorded; the running receipt remains available.',
+          );
+        }
+      }
+    } finally {
+      timer.cancel();
+    }
+  }
+
   try {
-    await runInstallationCommand(command);
+    await execution;
     const completedAt = Date.now();
+    const durationMs = completedAt - startedAt;
     const next = await readState();
     next.jobs ??= {};
-    next.jobs[command] = { state: 'succeeded', startedAt, completedAt };
+    next.jobs[command] = { state: 'succeeded', startedAt, completedAt, durationMs };
     await writeState(next);
-    return { job: command, state: 'succeeded', completedAt };
+    return { job: command, state: 'succeeded', completedAt, durationMs };
   } catch {
     const completedAt = Date.now();
+    const durationMs = completedAt - startedAt;
     const next = await readState();
     next.jobs ??= {};
-    next.jobs[command] = { state: 'failed', startedAt, completedAt };
+    next.jobs[command] = { state: 'failed', startedAt, completedAt, durationMs };
     await writeState(next);
     throw new Error(`Scheduled ${command} failed`);
   }
@@ -278,13 +428,14 @@ async function cycle() {
   let state = await readState();
   const initialStatus = observation.status;
   const priorIncidents = incidentsFor(initialStatus, Date.now(), state).filter((incident) => {
-    if (incident.key === 'coordinator-unavailable') return true;
+    if (incident.key === 'coordinator-unavailable' || incident.key === 'child-service-unavailable')
+      return true;
     const job = incident.key.startsWith('backup-') ? 'backup' : 'drill';
     return hasJobReceipt(job, initialStatus, state);
   });
   if (jobIsDue('backup', initialStatus, state, Date.now())) {
     try {
-      await runJob('backup');
+      await runJob('backup', priorIncidents);
     } catch {
       // The public installation status and durable scheduler receipt record the failure.
     }
@@ -389,6 +540,7 @@ async function deliver(incident: Incident, record: IncidentRecord) {
         '',
         'Inspect current installation health with:',
         'node --import tsx scripts/installation.ts status',
+        ...(incident.details ? ['', incident.details] : []),
       ].join('\n'),
     });
   } finally {
@@ -417,6 +569,7 @@ async function updateAlerts(incidents: Incident[], now = Date.now()) {
       existing && (!existing.resolvedAt || !existing.deliveredAt)
         ? existing
         : { firstSeenAt: incident.observedAt ?? now };
+    record.details = incident.details ?? record.details;
     record.resolvedAt = undefined;
     state.incidents[incident.key] = record;
   }
@@ -425,7 +578,14 @@ async function updateAlerts(incidents: Incident[], now = Date.now()) {
     .filter(([key, record]) => record.resolvedAt && !record.deliveredAt && !activeKeys.has(key))
     .flatMap(([key, record]) =>
       incidentTitles[key]
-        ? [{ key, title: incidentTitles[key], observedAt: record.firstSeenAt }]
+        ? [
+            {
+              key,
+              title: incidentTitles[key],
+              observedAt: record.firstSeenAt,
+              details: record.details,
+            },
+          ]
         : [],
     );
   const attempted: string[] = [];
