@@ -288,7 +288,7 @@ not a current blocker; no diagnosis or correction is claimed.
 ## MVP closure checklist
 
 The User confirmed these closure gates on 2026-10-07. This specification remains
-open while deployment is postponed. A list of commands or a passing local suite
+open while installation acceptance is incomplete. A list of commands or a passing local suite
 does not substitute for executed installation work.
 
 - [x] Record [Issue 17's current disposition](issues/17-diagnose-worker-ownership-recovery.md#user-directed-suspension--2026-10-07): open with `Status: needs-info` and `suspended` label, cause unknown, no correction claimed, and ownership protections retained. It is not a current blocker for this map.

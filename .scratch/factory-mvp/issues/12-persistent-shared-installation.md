@@ -92,9 +92,9 @@ recovery custody, alert routing, and acceptance of measured operational limits.
 
 ## Prepared deployment acceptance record
 
-This record is prepared from the committed contract and historical local evidence.
-It does not select an installation or report deployment acceptance. The operator
-must fill the unresolved values with nonsecret evidence before closure.
+This record combines the User-selected evaluation environment with historical
+local evidence. Selection is recorded below; execution and measured operational
+limits must be supported by nonsecret evidence before evaluation acceptance.
 
 ### Selected Docker evaluation — 2026-10-07
 
@@ -102,7 +102,7 @@ The User selected Docker on the current PC for the MVP evaluation, including
 SurrealDB and all other dependencies. The User is the installation operator.
 Use a dedicated Docker volume for backup and restore verification, and SMTP4Dev
 as the mock operator inbox. These choices supersede the unresolved selection
-fields below; the remaining rows retain the earlier preparation context.
+fields in the earlier preparation record. Measurements remain pending.
 
 The [Docker evaluation contract](../designs/docker-evaluation.md) records the
 implementation and verification plan. Same-host volume recovery is the selected
@@ -112,12 +112,12 @@ and restore time before agreeing their operational limits with the operator.
 
 | Acceptance item | Recorded local value or contract | Required installation value / evidence |
 | --- | --- | --- |
-| Responsible operator | No operator is recorded. | Name the operator and record execution dates, accepted revision, and evidence location. |
-| Host and deployment shape | Local exercise used separate native Node web/worker processes and Docker for SurrealDB and review sandboxes. Native Node is provisional. | Select the host and deployment shape; record runtime, supervision, network exposure, persistent paths, restricted access, startup order, and second-worker rejection. |
+| Responsible operator | The User is the MVP evaluation operator, as selected on 2026-10-07. | Record execution dates, accepted revision, and evidence location. |
+| Host and deployment shape | Docker Desktop on the current Windows PC, `DESKTOP-34DS59F`; observed Engine 29.5.3 and Compose 5.1.4. Factory and dependencies run in containers. | Record supervision, network exposure, persistent paths, restricted access, startup order, and second-worker rejection. |
 | Local database endpoint | Historical coordinator evidence records `ws://127.0.0.1:18012/rpc`, namespace `acceptance`; it is an ephemeral local test destination. | Record the chosen installation's nonsecret destination details and host/service restart evidence. |
-| Recovery destination and access | Local recovery used a configurable same-host directory; the bundle excludes the separately held root key. | Name the independent protected destination and recovery access method, and prove retrieval after active-host loss using separately held compatible root-key material. |
+| Recovery destination and access | The User selected a dedicated Docker volume for local backup and restore verification. Root-key material remains separate from bundles. | Record the volume and isolated restore evidence. Independent retrieval after active-host loss remains required before real deployment and is not established by this evaluation. |
 | Backup and drill schedules | Commands exist for daily backup and monthly restore drill; local code retains all valid recovery points. | Record deployed scheduler configuration, at least 30 daily points, key-ring coverage, root-key version retention, and successful scheduled job evidence. |
-| Alerts and operator response | Local status exposes backup/drill health and overdue state; no alert recipient or delivery is recorded. | Name the responsible recipient/operator, configure delivery, and record exercised failed and overdue backup/drill alerts. |
+| Alerts and operator response | The User selected SMTP4Dev as the mock operator inbox. | Configure the evaluation recipient and record delivered failed and overdue backup/drill alerts and SMTP retry behavior. |
 | Backup interruption | Temporary backup interruption is accepted for the MVP. The five-minute timeout applies per phase and is not a total interruption limit. | Measure complete backup and service interruption in the chosen environment; record the agreed maximum, maintenance window, service return, and response if exceeded or restart fails. |
 | Recovery point objective | The documented daily-backup target is at most 24 hours. | Verify the deployed schedule and failure monitoring meet that target and record the recovery point. |
 | Restore duration and recovery-time objective | Historical same-host restore drill evidence records `durationMs: 4989`; it is not a production measure. | Record the independent restore duration and agree the installation-specific recovery-time objective with the operator. |
