@@ -15,6 +15,10 @@ const factoryOrigin =
 const boundaryOrigin = process.env.FACTORY_EVALUATION_BOUNDARY_ORIGIN ?? 'http://127.0.0.1:18082';
 const composeFile = resolve(repositoryRoot, 'docker/evaluation/compose.yaml');
 const evidenceFile = resolve(repositoryRoot, '.runtime/docker-evaluation/review-acceptance.json');
+const publicationEvidenceFile = resolve(
+  repositoryRoot,
+  '.runtime/docker-evaluation/uncertain-publication-acceptance.json',
+);
 const sourceId = 'docker-evaluation';
 const controlledRepositoryUrl = 'http://host.docker.internal:18082/repository.git';
 const sourceSecret = 'docker-evaluation-source-fixture-secret-keep-local-only';
@@ -43,6 +47,29 @@ type EvaluationEvidence = {
   betaReviewRun: string;
   sourceCommit: string;
   targetCommit: string;
+};
+
+type UncertainPublicationEvidence = {
+  version: 1;
+  stage: 'publication-uncertain' | 'publication-confirmed';
+  createdAt: string;
+  confirmedAt?: string;
+  alphaWorkItem: string;
+  alphaReport: string;
+  alphaReviewRun: string;
+  alphaDecision: string;
+  betaWorkItem: string;
+  betaReport: string;
+  betaReviewRun: string;
+  betaDecision: string;
+  publicationId: string;
+  publicationOperationId: string;
+  providerEffectCount: number;
+  providerEffectId: string;
+  providerEffectDigest: string;
+  aiRequests: number;
+  publicationEvidenceReads: number;
+  providerEvidenceFact?: string;
 };
 
 function checkStatus(actual: number, expected: number, label: string) {
@@ -81,10 +108,20 @@ async function boundarySummary() {
     gitFetches: number;
     aiRequests: number;
     aiByOrganization: { alpha: number; beta: number };
+    publicationEvidenceReads: number;
     readResultConfirmed: boolean;
     changesResultConfirmed: boolean;
     effects: { id: number; digest: string }[];
   };
+}
+
+async function armPublicationResponseDrop(origin = boundaryOrigin) {
+  const { response, body } = await jsonAt(
+    `${origin}/__evaluation/faults/drop-next-publication-response`,
+    { method: 'POST' },
+  );
+  checkStatus(response.status, 200, 'One-shot controlled publication response fault');
+  assert.deepEqual(body, { armed: true, remainingPosts: 1 });
 }
 
 function invokeOperator(
@@ -520,7 +557,7 @@ async function waitForReviewCompletion(
   );
 }
 
-async function completeHeldReviews() {
+async function completeHeldReviews(interruptPublication = false) {
   const evidence = JSON.parse(await readFile(evidenceFile, 'utf8')) as EvaluationEvidence;
   const browser = new BrowserClient();
   await browser.login(factoryOrigin, 'alice');
@@ -551,6 +588,106 @@ async function completeHeldReviews() {
 
   const alphaPath = `/api/organizations/alpha/work-items/${evidence.alphaWorkItem}`;
   const publicationOperation = `docker-eval-publish-${evidence.alphaWorkItem}`;
+  if (interruptPublication) {
+    assert.equal(
+      priorAlphaPublication,
+      undefined,
+      'The uncertainty acceptance needs a fresh publication',
+    );
+    assert.equal(before.effects.length, 0, 'The controlled provider must have no prior effects');
+    const beforePublication = await boundarySummary();
+    assert.equal(beforePublication.effects.length, before.effects.length);
+    assert.equal(beforePublication.aiRequests, before.aiRequests);
+    assert.equal(beforePublication.publicationEvidenceReads, before.publicationEvidenceReads);
+
+    await armPublicationResponseDrop();
+    const requested = await publicJson(browser, `${alphaPath}/review-publications`, {
+      operationId: publicationOperation,
+      run: alpha.runId,
+      decision: alpha.decisionId,
+    });
+    assert.equal(requested.publication.status, 'queued');
+    const interrupted = await waitFor(
+      'Lost-response publication uncertainty',
+      () => reviewView(browser, 'alpha', evidence.alphaWorkItem),
+      (view) =>
+        view.publications.some(
+          (row: any) => row.id === requested.publication.id && row.status === 'uncertain',
+        ),
+    );
+    const publication = interrupted.publications.find(
+      (row: any) => row.id === requested.publication.id,
+    );
+    assert.equal(publication.run, alpha.runId);
+    assert.equal(publication.decision, alpha.decisionId);
+    assert.equal(publication.report, evidence.alphaReport);
+
+    const afterPublication = await boundarySummary();
+    assert.equal(
+      afterPublication.effects.length,
+      1,
+      'The lost response must leave exactly one effect',
+    );
+    assert.equal(afterPublication.aiRequests, before.aiRequests);
+    assert.equal(
+      afterPublication.publicationEvidenceReads,
+      before.publicationEvidenceReads,
+      'The interrupted attempt must not perform provider reconciliation itself',
+    );
+    const providerEffect = afterPublication.effects[0];
+    assert.ok(providerEffect);
+    assert.match(providerEffect.digest, /^[a-f0-9]{64}$/);
+
+    const receipt: UncertainPublicationEvidence = {
+      version: 1,
+      stage: 'publication-uncertain',
+      createdAt: new Date().toISOString(),
+      alphaWorkItem: evidence.alphaWorkItem,
+      alphaReport: evidence.alphaReport,
+      alphaReviewRun: alpha.runId,
+      alphaDecision: alpha.decisionId,
+      betaWorkItem: evidence.betaWorkItem,
+      betaReport: evidence.betaReport,
+      betaReviewRun: beta.runId,
+      betaDecision: beta.decisionId,
+      publicationId: publication.id,
+      publicationOperationId: publicationOperation,
+      providerEffectCount: afterPublication.effects.length,
+      providerEffectId: String(providerEffect.id),
+      providerEffectDigest: providerEffect.digest,
+      aiRequests: afterPublication.aiRequests,
+      publicationEvidenceReads: afterPublication.publicationEvidenceReads,
+    };
+    await mkdir(dirname(publicationEvidenceFile), { recursive: true });
+    await writeFile(publicationEvidenceFile, `${JSON.stringify(receipt, null, 2)}\n`);
+    console.log(
+      JSON.stringify({
+        ready: true,
+        stage: receipt.stage,
+        alphaWorkItem: receipt.alphaWorkItem,
+        alphaReport: receipt.alphaReport,
+        alphaReviewRun: receipt.alphaReviewRun,
+        alphaDecision: receipt.alphaDecision,
+        betaWorkItem: receipt.betaWorkItem,
+        betaReport: receipt.betaReport,
+        betaReviewRun: receipt.betaReviewRun,
+        betaDecision: receipt.betaDecision,
+        publicationId: receipt.publicationId,
+        providerEffectCount: receipt.providerEffectCount,
+        aiRequests: receipt.aiRequests,
+        evidenceFile: publicationEvidenceFile,
+        checks: [
+          'Explicit publication uses the retained human Review Decision',
+          'A lost provider response leaves the publication uncertain with one persisted effect',
+          'No provider evidence GET or additional AI request occurs before recovery',
+          'The nonsecret receipt binds both Organizations, the publication, and its provider effect',
+          'The driver returns before Review Finalization',
+        ],
+      }),
+    );
+    return;
+  }
+
   const publicationResult = await publicJson(browser, `${alphaPath}/review-publications`, {
     operationId: publicationOperation,
     run: alpha.runId,
@@ -677,6 +814,181 @@ async function completeHeldReviews() {
         'Publication is explicitly requested after human confirmation and produces one controlled GitHub effect',
         'Repeated publication request returns the same Activity without another provider effect',
         'Review Finalization Workflow separately completes the alpha Work Item without replaying publication',
+      ],
+    }),
+  );
+}
+
+async function reconcilePublication() {
+  const receipt = JSON.parse(
+    await readFile(publicationEvidenceFile, 'utf8'),
+  ) as UncertainPublicationEvidence;
+  assert.equal(receipt.version, 1);
+  assert.equal(receipt.stage, 'publication-uncertain');
+  assert.equal(receipt.providerEffectCount, 1);
+
+  const browser = new BrowserClient();
+  await browser.login(factoryOrigin, 'alice');
+  const alphaPath = `/api/organizations/alpha/work-items/${receipt.alphaWorkItem}`;
+  const before = await boundarySummary();
+  assert.equal(before.effects.length, receipt.providerEffectCount);
+  assert.ok(
+    before.effects.some(
+      (effect) =>
+        String(effect.id) === receipt.providerEffectId &&
+        effect.digest === receipt.providerEffectDigest,
+    ),
+    'The controlled provider must retain the exact effect written before the lost response',
+  );
+  assert.equal(before.aiRequests, receipt.aiRequests);
+  assert.equal(before.publicationEvidenceReads, receipt.publicationEvidenceReads);
+
+  const heldReviews = await reviewView(browser, 'alpha', receipt.alphaWorkItem);
+  const heldPublication = heldReviews.publications.find(
+    (row: any) => row.id === receipt.publicationId,
+  );
+  assert.ok(heldPublication, 'The restored publication identity must survive the operator restore');
+  assert.equal(heldPublication.status, 'uncertain');
+  assert.equal(heldPublication.run, receipt.alphaReviewRun);
+  assert.equal(heldPublication.report, receipt.alphaReport);
+  assert.equal(heldPublication.decision, receipt.alphaDecision);
+
+  const reconciliation = await browser.json(
+    factoryOrigin,
+    `${alphaPath}/publication-reconciliation`,
+    {
+      operationId: `docker-eval-reconcile-${receipt.publicationId}`,
+      run: receipt.alphaReviewRun,
+      publication: receipt.publicationId,
+    },
+  );
+  checkStatus(reconciliation.status, 200, 'Public provider publication reconciliation');
+  assert.equal(reconciliation.body.publication.id, receipt.publicationId);
+  assert.equal(reconciliation.body.publication.status, 'reconciliation-queued');
+
+  const reconciledReviews = await waitFor(
+    'Factory publication evidence after restore',
+    () => reviewView(browser, 'alpha', receipt.alphaWorkItem),
+    (view) => {
+      const publication = view.publications.find((row: any) => row.id === receipt.publicationId);
+      return (
+        publication?.status === 'uncertain' &&
+        !!publication.evidence &&
+        view.publicationHistory.some(
+          (row: any) => row.id === publication.evidence && row.kind === 'publication.evidence',
+        )
+      );
+    },
+  );
+  const current = reconciledReviews.publications.find(
+    (row: any) => row.id === receipt.publicationId,
+  );
+  assert.equal(current.run, receipt.alphaReviewRun);
+  assert.equal(current.report, receipt.alphaReport);
+  assert.equal(current.decision, receipt.alphaDecision);
+  const providerEvidence = reconciledReviews.publicationHistory.find(
+    (row: any) => row.id === current.evidence && row.kind === 'publication.evidence',
+  );
+  assert.ok(providerEvidence);
+  assert.equal(providerEvidence.payload.activity, receipt.publicationId);
+  assert.equal(providerEvidence.payload.run, receipt.alphaReviewRun);
+  assert.equal(providerEvidence.payload.attempt, current.attempt);
+  assert.equal(providerEvidence.payload.complete, true);
+  assert.notEqual(providerEvidence.payload.unavailable, true);
+  assert.equal(providerEvidence.payload.matches.length, 1);
+  assert.deepEqual(providerEvidence.payload.matches[0], {
+    id: receipt.providerEffectId,
+    contentDigest: receipt.providerEffectDigest,
+  });
+
+  const afterReconciliation = await boundarySummary();
+  assert.equal(afterReconciliation.effects.length, receipt.providerEffectCount);
+  assert.equal(afterReconciliation.aiRequests, receipt.aiRequests);
+  assert.equal(
+    afterReconciliation.publicationEvidenceReads,
+    receipt.publicationEvidenceReads + 1,
+    'The public Factory reconciliation must perform one provider evidence GET',
+  );
+
+  const retry = await browser.json(factoryOrigin, `${alphaPath}/publication-confirmation`, {
+    operationId: `docker-eval-positive-effect-retry-${receipt.publicationId}`,
+    run: receipt.alphaReviewRun,
+    publication: receipt.publicationId,
+    evidence: current.evidence,
+    resolution: 'retry',
+    reason: 'Positive provider evidence prohibits another publication attempt',
+    confirmedStopped: true,
+  });
+  assert.equal(retry.status, 409);
+  assert.match(retry.body.error ?? '', /Provider evidence shows publication/);
+  const afterRejectedRetry = await boundarySummary();
+  assert.equal(afterRejectedRetry.effects.length, receipt.providerEffectCount);
+  assert.equal(afterRejectedRetry.aiRequests, receipt.aiRequests);
+  assert.equal(
+    afterRejectedRetry.publicationEvidenceReads,
+    afterReconciliation.publicationEvidenceReads,
+  );
+
+  const confirmed = await browser.json(factoryOrigin, `${alphaPath}/publication-confirmation`, {
+    operationId: `docker-eval-positive-effect-confirmed-${receipt.publicationId}`,
+    run: receipt.alphaReviewRun,
+    publication: receipt.publicationId,
+    evidence: current.evidence,
+    resolution: 'completed',
+    reason: 'Verified the bound provider effect through Factory reconciliation evidence',
+    confirmedStopped: true,
+  });
+  checkStatus(confirmed.status, 200, 'Confirm completed publication with bound evidence');
+  assert.equal(confirmed.body.publication.id, receipt.publicationId);
+  assert.equal(confirmed.body.publication.status, 'completed');
+  assert.equal(confirmed.body.publication.evidence, current.evidence);
+
+  const completedReviews = await reviewView(browser, 'alpha', receipt.alphaWorkItem);
+  const completedPublication = completedReviews.publications.find(
+    (row: any) => row.id === receipt.publicationId,
+  );
+  assert.equal(completedPublication.status, 'completed');
+  assert.equal(completedPublication.evidence, current.evidence);
+  assert.equal(completedPublication.run, receipt.alphaReviewRun);
+  assert.equal(completedPublication.decision, receipt.alphaDecision);
+  assert.equal((await publicJson(browser, alphaPath)).activeRun, undefined);
+
+  const afterConfirmation = await boundarySummary();
+  assert.equal(afterConfirmation.effects.length, receipt.providerEffectCount);
+  assert.equal(afterConfirmation.aiRequests, receipt.aiRequests);
+  assert.equal(
+    afterConfirmation.publicationEvidenceReads,
+    afterReconciliation.publicationEvidenceReads,
+    'Positive-effect confirmation must not issue another provider request',
+  );
+
+  const updatedReceipt: UncertainPublicationEvidence = {
+    ...receipt,
+    stage: 'publication-confirmed',
+    confirmedAt: new Date().toISOString(),
+    providerEvidenceFact: current.evidence,
+  };
+  await writeFile(publicationEvidenceFile, `${JSON.stringify(updatedReceipt, null, 2)}\n`);
+  console.log(
+    JSON.stringify({
+      ready: true,
+      stage: updatedReceipt.stage,
+      alphaWorkItem: receipt.alphaWorkItem,
+      alphaReport: receipt.alphaReport,
+      alphaReviewRun: receipt.alphaReviewRun,
+      alphaDecision: receipt.alphaDecision,
+      publicationId: receipt.publicationId,
+      providerEvidenceFact: current.evidence,
+      providerEffectCount: afterConfirmation.effects.length,
+      aiRequests: afterConfirmation.aiRequests,
+      publicationEvidenceReads: afterConfirmation.publicationEvidenceReads,
+      evidenceFile: publicationEvidenceFile,
+      checks: [
+        'Retained uncertainty, bound Review Decision, and provider effect survive restore and restart',
+        'The public Factory API gathers positive provider evidence without another publication effect or AI request',
+        'Explicit retry is rejected while positive effect evidence is present',
+        'Completed resolution uses the bound provider evidence and confirmedStopped true',
+        'Confirmation releases the retained Work Item without another provider request',
       ],
     }),
   );
@@ -846,6 +1158,50 @@ async function checkFixture() {
     });
     checkStatus(publication.status, 201, 'Controlled GitHub publication');
     const firstEffect = (await publication.json()) as any;
+
+    const armed = await fetch(
+      `${boundary.origin}/__evaluation/faults/drop-next-publication-response`,
+      {
+        method: 'POST',
+      },
+    );
+    checkStatus(armed.status, 200, 'One-shot controlled publication response fault');
+    let droppedResponse = false;
+    try {
+      await fetch(`${boundary.origin}/repos/example/code/issues/42/comments`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${publicationKey}`,
+        },
+        body: JSON.stringify({ body: 'Persisted fixture comment after lost response' }),
+      });
+    } catch {
+      droppedResponse = true;
+    }
+    assert.equal(droppedResponse, true, 'The controlled response must be lost after publication');
+    const afterDropResponse = await fetch(`${boundary.origin}/summary`);
+    const afterDrop = (await afterDropResponse.json()) as any;
+    assert.equal(
+      afterDrop.effects.length,
+      2,
+      'The effect must persist before its response is lost',
+    );
+    const droppedEffect = afterDrop.effects[1];
+
+    const nextPublication = await fetch(
+      `${boundary.origin}/repos/example/code/issues/42/comments`,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${publicationKey}`,
+        },
+        body: JSON.stringify({ body: 'One-shot fixture fault has reset' }),
+      },
+    );
+    checkStatus(nextPublication.status, 201, 'Publication after one-shot response fault');
+    const nextEffect = (await nextPublication.json()) as any;
     await boundary.close();
 
     const restarted = await createReviewBoundary({
@@ -859,15 +1215,19 @@ async function checkFixture() {
       });
       checkStatus(comments.status, 200, 'Persisted controlled GitHub effects');
       const retained = (await comments.json()) as any[];
-      assert.equal(retained.length, 1);
+      assert.equal(retained.length, 3);
       assert.equal(retained[0].id, firstEffect.id);
       assert.equal(retained[0].body, 'Confirmed fixture report');
+      assert.equal(retained[1].id, droppedEffect.id);
+      assert.equal(retained[1].body, 'Persisted fixture comment after lost response');
+      assert.equal(retained[2].id, nextEffect.id);
+      assert.equal(retained[2].body, 'One-shot fixture fault has reset');
       const summaryResponse = await fetch(`${restarted.origin}/summary`);
       const summary = (await summaryResponse.json()) as any;
       assert.equal(
         summary.effects.length,
-        1,
-        'The effect journal must survive boundary process restart',
+        3,
+        'All provider effects, including one with a lost response, must survive boundary restart',
       );
     } finally {
       await restarted.close();
@@ -883,6 +1243,7 @@ async function checkFixture() {
       checks: [
         'Git dumb-HTTP commit fetch',
         'OpenAI-compatible tool-call and result flow',
+        'A one-shot publication response fault preserves its effect and resets after one POST',
         'Persistent mock publication survives boundary restart',
       ],
     }),
@@ -897,11 +1258,18 @@ async function boundaryMetadataAt(origin: string): Promise<BoundaryMetadata> {
 
 async function main() {
   const args = new Set(process.argv.slice(2));
+  if (args.has('--reconcile-publication')) return reconcilePublication();
   if (args.has('--fixture-check')) return checkFixture();
   if (args.has('--hold')) return startHeldReviews();
   if (args.has('--verify')) return verifyRestoredWaits();
-  if (args.has('--complete')) return completeHeldReviews();
-  throw new Error('Choose --fixture-check, --hold, --verify, or --complete');
+  if (args.has('--complete')) {
+    if (args.has('--interrupt-publication') && args.has('--await-finalization'))
+      throw new Error('--interrupt-publication stops before finalization');
+    return completeHeldReviews(args.has('--interrupt-publication'));
+  }
+  throw new Error(
+    'Choose --fixture-check, --hold, --verify, --complete, or --reconcile-publication',
+  );
 }
 
 await main();

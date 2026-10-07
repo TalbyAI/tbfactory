@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { deflateSync } from 'node:zlib';
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { mkdir, open, readFile, rename } from 'node:fs/promises';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const alphaAiKey = 'docker-evaluation-alpha-ai-fixture-key';
@@ -112,8 +112,22 @@ async function readEffects(path: string): Promise<Effect[]> {
 
 async function atomicWrite(path: string, value: unknown) {
   const temporary = `${path}.tmp`;
-  await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
+  const file = await open(temporary, 'w', 0o600);
+  try {
+    await file.writeFile(`${JSON.stringify(value, null, 2)}\n`);
+    await file.sync();
+  } finally {
+    await file.close();
+  }
   await rename(temporary, path);
+  if (process.platform !== 'win32') {
+    const directory = await open(dirname(path), 'r');
+    try {
+      await directory.sync();
+    } finally {
+      await directory.close();
+    }
+  }
 }
 
 function safeEffects(effects: Effect[]) {
@@ -148,8 +162,10 @@ export async function createReviewBoundary(options: ReviewBoundaryOptions = {}) 
   const aiByOrganization = { alpha: 0, beta: 0 };
   let aiRequests = 0;
   let gitFetches = 0;
+  let publicationEvidenceReads = 0;
   let readResultConfirmed = false;
   let changesResultConfirmed = false;
+  let dropNextPublicationResponse = false;
   let writes = Promise.resolve();
 
   const server = createServer(async (request, response) => {
@@ -174,10 +190,23 @@ export async function createReviewBoundary(options: ReviewBoundaryOptions = {}) 
           gitFetches,
           aiRequests,
           aiByOrganization,
+          publicationEvidenceReads,
           readResultConfirmed,
           changesResultConfirmed,
           effects: safeEffects(effects),
         });
+        return;
+      }
+      if (
+        request.method === 'POST' &&
+        path === '/__evaluation/faults/drop-next-publication-response'
+      ) {
+        if (dropNextPublicationResponse) {
+          json(response, 409, { error: { message: 'A response fault is already armed' } });
+          return;
+        }
+        dropNextPublicationResponse = true;
+        json(response, 200, { armed: true, remainingPosts: 1 });
         return;
       }
       if (request.method === 'GET' && path.startsWith('/repository.git/')) {
@@ -304,6 +333,7 @@ export async function createReviewBoundary(options: ReviewBoundaryOptions = {}) 
           return;
         }
         await writes;
+        publicationEvidenceReads++;
         const effects = await readEffects(effectsPath);
         json(
           response,
@@ -325,6 +355,8 @@ export async function createReviewBoundary(options: ReviewBoundaryOptions = {}) 
           json(response, 422, { message: 'Comment body required' });
           return;
         }
+        const dropResponse = dropNextPublicationResponse;
+        dropNextPublicationResponse = false;
         const complete = writes.then(async () => {
           const effects = await readEffects(effectsPath);
           const effect: Effect = {
@@ -341,6 +373,10 @@ export async function createReviewBoundary(options: ReviewBoundaryOptions = {}) 
           () => undefined,
         );
         const effect = await complete;
+        if (dropResponse) {
+          response.destroy();
+          return;
+        }
         json(response, 201, { id: effect.id, body: effect.body });
         return;
       }
