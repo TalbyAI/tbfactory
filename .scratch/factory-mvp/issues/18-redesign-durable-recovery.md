@@ -2,6 +2,7 @@
 
 Status: needs-triage
 Type: HITL
+Labels: wayfinder:grilling
 State: open
 
 ## Parent

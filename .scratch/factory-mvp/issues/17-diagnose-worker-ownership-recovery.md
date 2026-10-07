@@ -2,6 +2,7 @@
 
 Status: ready-for-agent
 Type: AFK
+Labels: wayfinder:task
 State: open
 
 ## Parent
