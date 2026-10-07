@@ -71,7 +71,7 @@ recovery custody, alert routing, and acceptance of measured operational limits.
   Workflow Runs, and activation after operator reconciliation. Record the accepted
   MVP limitation: pre-activation external observations do not automatically start
   new Review Workflows, and `recovery-list` does not enumerate observations lacking
-  a Run. The later redesign is tracked in [Issue 18](18-redesign-durable-recovery.md).
+  a Workflow Run. The later redesign is tracked in [Issue 18](18-redesign-durable-recovery.md).
 - [ ] Record the actual recovery destination, recovery point, measured restore
   duration, and an agreed installation-specific recovery-time objective. Check the
   daily-backup recovery-point objective of at most 24 hours against scheduling and
@@ -121,7 +121,7 @@ and restore time before agreeing their operational limits with the operator.
 | Backup interruption | Temporary backup interruption is accepted for the MVP. The five-minute timeout applies per phase and is not a total interruption limit. | Measure complete backup and service interruption in the chosen environment; record the agreed maximum, maintenance window, service return, and response if exceeded or restart fails. |
 | Recovery point objective | The documented daily-backup target is at most 24 hours. | Verify the deployed schedule and failure monitoring meet that target and record the recovery point. |
 | Restore duration and recovery-time objective | Historical same-host restore drill evidence records `durationMs: 4989`; it is not a production measure. | Record the independent restore duration and agree the installation-specific recovery-time objective with the operator. |
-| Existing-Run recovery | Local checks record retained identities, human waits, explicit restore-hold dispositions, and conservative provider recovery. | Exercise ordinary restart, interrupted-execution recovery, restore hold, ownership, cancellation, and provider reconciliation on the chosen installation; retain unknown AI calls without replay. |
+| Existing Workflow Run recovery | Local checks record retained identities, human waits, explicit restore-hold dispositions, and conservative provider recovery. | Exercise ordinary restart, interrupted-execution recovery, restore hold, ownership, cancellation, and provider reconciliation on the chosen installation; retain unknown AI calls without replay. |
 | Ownership diagnostic | The first historical full-suite invocation reported one startup error; later repetitions and the final suite passed without a causal diagnosis or correction. [Issue 17](17-diagnose-worker-ownership-recovery.md) is open with `needs-info` status and `suspended` label. | Preserve all ownership protections. This diagnostic is not a current blocker; the installation-specific ownership and confirmed-stop checks above remain required. |
 
 ## Blocked by
@@ -165,7 +165,7 @@ restore, forced maintenance hold, explicit activation, activated second-generati
 backup, and isolated restore drill. It also verified two Organizations, encrypted
 secret recovery, retained human wait and Workflow identity, completed provider
 publication, revoked and cross-Organization Artifact denial, root-key exclusion,
-and an active public Run whose backup timed out without producing a bundle. Active
+and an active public Workflow Run whose backup timed out without producing a bundle. Active
 AI work completed naturally before cancellation.
 
 Executed checks:
@@ -227,7 +227,7 @@ and before closure. The runtime and operational settings are still deployment wo
 
 The User accepted conservative handling of pre-activation observations as an MVP
 limitation and deferred the broader recovery redesign to Issue 18. Existing Workflow
-Run durability, retained human waits, and manual recovery of interrupted execution
+Workflow Run durability, retained human waits, and manual recovery of interrupted execution
 remain mandatory. The original ownership startup failure is tracked in Issue 17
 and blocks recovery acceptance until causally diagnosed and corrected.
 

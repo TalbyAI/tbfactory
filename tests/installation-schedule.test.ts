@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { mkdtemp, mkdir, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { createServer, type Server } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -12,7 +12,13 @@ type InstallationStatus = {
   web?: boolean;
   worker?: boolean;
   restoreHold?: { activated: boolean; pendingRuns: number };
-  backup: { state?: string; overdue: boolean; startedAt?: number; completedAt?: number };
+  backup: {
+    state?: string;
+    overdue: boolean;
+    startedAt?: number;
+    completedAt?: number;
+    lastSuccessful?: { completedAt: number; recoveryPointAt?: number; bundle?: string };
+  };
   drill: { state?: string; overdue: boolean; startedAt?: number; completedAt?: number };
 };
 
@@ -139,6 +145,33 @@ async function runScheduler(args: string[], env: NodeJS.ProcessEnv) {
     const timer = setTimeout(() => {
       child.kill();
       reject(new Error(`Scheduler command timed out: ${output}`));
+    }, 30_000);
+    child.once('error', (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    child.once('exit', (exitCode) => {
+      clearTimeout(timer);
+      resolve(exitCode);
+    });
+  });
+  return { code, output };
+}
+
+async function runInstallationStatus(env: NodeJS.ProcessEnv) {
+  const child = spawn(process.execPath, ['--import', 'tsx', 'scripts/installation.ts', 'status'], {
+    cwd: process.cwd(),
+    env: { ...process.env, ...env },
+    stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: true,
+  });
+  let output = '';
+  child.stdout.setEncoding('utf8').on('data', (part) => (output += part));
+  child.stderr.setEncoding('utf8').on('data', (part) => (output += part));
+  const code = await new Promise<number | null>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      child.kill();
+      reject(new Error(`Installation status command timed out: ${output}`));
     }, 30_000);
     child.once('error', (error) => {
       clearTimeout(timer);
@@ -475,6 +508,128 @@ test('a failed drill waits for its next scheduled retry instead of repeating imm
   }
 });
 
+test('a failed backup retries within five minutes even when its regular cadence is daily', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'factory-scheduler-backup-retry-'));
+  const recovery = join(directory, 'recovery');
+  await mkdir(recovery);
+  const installation = `scheduler-${process.pid}-${Date.now()}`;
+  const now = Date.now();
+  const status: InstallationStatus = {
+    coordinator: 'running',
+    backup: {
+      state: 'failed',
+      overdue: false,
+      startedAt: now - 4 * 60 * 1000,
+      completedAt: now - 4 * 60 * 1000 + 1,
+    },
+    drill: { state: 'succeeded', overdue: false, completedAt: now - 60_000 },
+  };
+  const coordinator = await startCoordinator(recovery, installation, status, (command) => {
+    if (command === 'backup')
+      status.backup = {
+        state: 'succeeded',
+        overdue: false,
+        startedAt: Date.now(),
+        completedAt: Date.now(),
+      };
+  });
+  const smtp = await startSmtp();
+  const env = {
+    FACTORY_RECOVERY_DIRECTORY: recovery,
+    FACTORY_INSTALLATION: installation,
+    FACTORY_SCHEDULE_BACKUP_INTERVAL_MS: '82800000',
+    FACTORY_SMTP_HOST: '127.0.0.1',
+    FACTORY_SMTP_PORT: String(smtp.port),
+    FACTORY_SMTP_FROM: 'factory@example.test',
+    FACTORY_SMTP_TO: 'operator@example.test',
+    FACTORY_SMTP_RETRY_MS: '0',
+  };
+  try {
+    await runScheduler(['run-once'], env);
+    assert.deepEqual(coordinator.operations, [], 'a failure younger than five minutes waits');
+
+    status.backup.completedAt = Date.now() - 6 * 60 * 1000;
+    status.backup.startedAt = status.backup.completedAt - 1000;
+    await runScheduler(['run-once'], env);
+    assert.deepEqual(coordinator.operations, ['backup']);
+    assert.equal(status.backup.state, 'succeeded');
+
+    const abandonedAt = Date.now() - 6 * 60 * 1000;
+    status.backup = { state: 'running', overdue: false, startedAt: abandonedAt };
+    await writeFile(
+      join(recovery, 'installation-scheduler-state.json'),
+      JSON.stringify({
+        format: 1,
+        incidents: {},
+        jobs: { backup: { state: 'running', startedAt: abandonedAt } },
+      }),
+    );
+    await runScheduler(['run-once'], env);
+    assert.deepEqual(coordinator.operations, ['backup', 'backup']);
+    assert.equal(status.backup.state, 'succeeded');
+  } finally {
+    await closeServer(coordinator.server);
+    await closeServer(smtp.server);
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('status keeps the last successful recovery point through failed and running attempts', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'factory-status-last-success-'));
+  const recovery = join(directory, 'recovery');
+  await mkdir(recovery);
+  const installation = `status-${process.pid}-${Date.now()}`;
+  const now = Date.now();
+  const lastSuccessful = {
+    completedAt: now - 23 * 60 * 60 * 1000,
+    recoveryPointAt: now - 23 * 60 * 60 * 1000 - 1000,
+    bundle: join(recovery, 'recovery-last-success'),
+  };
+  const statusPath = join(recovery, 'installation-status.json');
+  const env = {
+    FACTORY_RECOVERY_DIRECTORY: recovery,
+    FACTORY_INSTALLATION: installation,
+  };
+  try {
+    for (const currentAttempt of [
+      { state: 'failed', startedAt: now - 1000, completedAt: now },
+      { state: 'running', startedAt: now },
+    ]) {
+      await writeFile(
+        statusPath,
+        JSON.stringify({
+          backup: { ...currentAttempt, lastSuccessful },
+          drill: { state: 'succeeded', completedAt: now - 1000 },
+        }),
+      );
+      const result = await runInstallationStatus(env);
+      const reported = JSON.parse(result.output);
+      assert.equal(reported.backup.overdue, false, `${currentAttempt.state} uses last success`);
+      assert.deepEqual(reported.backup.lastSuccessful, lastSuccessful);
+    }
+
+    await writeFile(
+      statusPath,
+      JSON.stringify({
+        backup: {
+          state: 'failed',
+          startedAt: now - 60_000,
+          completedAt: now - 50_000,
+          lastSuccessful: {
+            ...lastSuccessful,
+            completedAt: now - 23 * 60 * 60 * 1000,
+            recoveryPointAt: now - 25 * 60 * 60 * 1000,
+          },
+        },
+      }),
+    );
+    const overdue = await runInstallationStatus(env);
+    assert.equal(JSON.parse(overdue.output).backup.overdue, true);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test('a successful restore drill recurs on the next calendar month', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'factory-scheduler-monthly-'));
   const recovery = join(directory, 'recovery');
@@ -693,7 +848,7 @@ test('a completed overlong backup receipt keeps an SMTP window alert retryable',
   }
 });
 
-test('an explicit child-service failure alerts except during backup or an unactivated restore hold', async () => {
+test('child health allows backup stops and an absent held worker but reports a missing web service', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'factory-scheduler-child-service-'));
   const recovery = join(directory, 'recovery');
   await mkdir(recovery);
@@ -742,11 +897,22 @@ test('an explicit child-service failure alerts except during backup or an unacti
     assert.doesNotMatch(heldRestore.output, /child-service-unavailable/);
     assert.equal(smtp.messages.length, 1);
 
+    status.web = false;
+    const heldWebOutage = await runScheduler(['check'], env);
+    assert.equal(heldWebOutage.code, 0, heldWebOutage.output);
+    assert.match(heldWebOutage.output, /child-service-unavailable/);
+    assert.equal(smtp.messages.length, 2, 'An unactivated hold still reports missing web');
+
+    status.web = true;
+    const heldWebRecovered = await runScheduler(['check'], env);
+    assert.equal(heldWebRecovered.code, 0, heldWebRecovered.output);
+    assert.doesNotMatch(heldWebRecovered.output, /child-service-unavailable/);
+
     status.restoreHold.activated = true;
     const recoveredHold = await runScheduler(['check'], env);
     assert.equal(recoveredHold.code, 0, recoveredHold.output);
     assert.match(recoveredHold.output, /child-service-unavailable/);
-    assert.equal(smtp.messages.length, 2, 'A resolved incident notifies again if it returns');
+    assert.equal(smtp.messages.length, 3, 'A resolved incident notifies again if it returns');
   } finally {
     await closeServer(coordinator.server);
     await closeServer(smtp.server);
@@ -788,8 +954,13 @@ test('the Docker healthcheck ignores schedule failures and expected service stop
 
     status.backup.state = 'succeeded';
     status.restoreHold = { activated: false, pendingRuns: 0 };
+    status.web = false;
     const restoreHold = await runFactoryHealth(env);
-    assert.equal(restoreHold.code, 0, restoreHold.output);
+    assert.equal(restoreHold.code, 1, restoreHold.output);
+
+    status.web = true;
+    const heldWorker = await runFactoryHealth(env);
+    assert.equal(heldWorker.code, 0, heldWorker.output);
   } finally {
     await closeServer(coordinator.server);
     await rm(directory, { recursive: true, force: true });

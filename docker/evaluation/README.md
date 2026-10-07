@@ -51,13 +51,32 @@ it does not clear stale ownership markers automatically. The Docker CLI and
 socket allow the trusted Factory worker to build the pinned repository sandbox
 image and create isolated review sandboxes.
 
+If a child exits unexpectedly, graceful coordinator shutdown can refuse to
+finish. Check `installation.ts status` and verify that both child processes are
+absent, the database has no `worker_owner` record, and the worker directory has
+no `worker.lock` before force-stopping the coordinator or container. Do not
+delete either ownership marker to make shutdown proceed. If a marker remains,
+keep the coordinator available and follow the worker recovery procedure. On
+Linux, coordinator startup probes an existing Unix control socket before reuse:
+it refuses an active listener and removes only a confirmed stale socket path.
+This recovery does not change worker ownership markers.
+
+During an unactivated restore hold, the maintenance web process remains live and
+only the worker's absence is expected. Scheduler incidents and Docker health
+checks still report an unavailable web process.
+
 Operational jobs run in the scheduler container after the Factory is healthy.
 It shares only the backup/status volume and does not receive the root-key volume,
 database credentials, or Docker socket. It runs the normal scheduled backup
 startup path and then follows the configured daily backup and monthly restore
 drill intervals. The evaluation backup cadence is slightly under 24 hours so
 scheduler polling and capture time fit within the 24-hour recovery-point
-objective. Use the public scheduled commands for a local evaluation:
+objective. Failed or stale-running jobs retry every five minutes by default;
+`FACTORY_SCHEDULE_RETRY_INTERVAL_MS` can configure that interval. This margin
+cannot guarantee a 24-hour recovery point if the PC or scheduler is offline or
+backups keep failing. Status and overdue alerts use the most recent successful
+`recoveryPointAt`, so operators can respond before it passes 24 hours. Use the
+public scheduled commands for a local evaluation:
 
 ```powershell
 docker compose -f docker/evaluation/compose.yaml exec scheduler node --import tsx scripts/installation-schedule.ts backup

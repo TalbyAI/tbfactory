@@ -6,6 +6,7 @@ import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { atomicWrite } from '../src/server/durable-files';
+import { recoverStaleControlSocket } from './installation-control-socket';
 import { configuredRing, databaseConfig } from '../src/server/config';
 import { OrganizationSecrets } from '../src/server/secrets';
 import { connectStore } from '../src/server/store';
@@ -36,6 +37,11 @@ type StoredStatus = {
     bundle?: string;
     recoveryPointAt?: number;
     error?: string;
+    lastSuccessful?: {
+      completedAt: number;
+      recoveryPointAt?: number;
+      bundle?: string;
+    };
   };
   drill?: {
     state: 'running' | 'succeeded' | 'failed';
@@ -80,7 +86,15 @@ async function readStatus(): Promise<StoredStatus> {
 }
 
 function backupAndDrillHealth(status: StoredStatus, now: number) {
-  const lastBackup = status.backup?.state === 'succeeded' ? status.backup.completedAt : undefined;
+  const lastSuccessfulBackup =
+    status.backup?.state === 'succeeded'
+      ? {
+          recoveryPointAt:
+            status.backup.recoveryPointAt ?? status.backup.lastSuccessful?.recoveryPointAt,
+          completedAt: status.backup.completedAt ?? status.backup.lastSuccessful?.completedAt,
+        }
+      : status.backup?.lastSuccessful;
+  const lastBackup = lastSuccessfulBackup?.recoveryPointAt ?? lastSuccessfulBackup?.completedAt;
   const lastDrill = status.drill?.state === 'succeeded' ? status.drill.completedAt : undefined;
   return {
     backup: {
@@ -216,6 +230,8 @@ class InstallationRuntime {
   private readonly address = controlAddress();
 
   async start() {
+    await mkdir(recoveryDirectory(), { recursive: true, mode: 0o700 });
+    await recoverStaleControlSocket(this.address);
     await checkRingAndDatabase();
     await mkdir(resolve(required('FACTORY_ARTIFACT_DIRECTORY')), {
       recursive: true,
@@ -469,7 +485,20 @@ class InstallationRuntime {
   private async backup() {
     const status = await readStatus();
     const startedAt = Date.now();
-    const backupStatus: NonNullable<StoredStatus['backup']> = { state: 'running', startedAt };
+    const lastSuccessful =
+      status.backup?.lastSuccessful ??
+      (status.backup?.state === 'succeeded' && status.backup.completedAt !== undefined
+        ? {
+            completedAt: status.backup.completedAt,
+            recoveryPointAt: status.backup.recoveryPointAt,
+            bundle: status.backup.bundle,
+          }
+        : undefined);
+    const backupStatus: NonNullable<StoredStatus['backup']> = {
+      state: 'running',
+      startedAt,
+      ...(lastSuccessful ? { lastSuccessful } : {}),
+    };
     await writeStatus({ ...status, backup: backupStatus });
     const timeoutMs = Number(process.env.FACTORY_BACKUP_TIMEOUT_MS ?? 300_000);
     let drained = false;
@@ -499,6 +528,11 @@ class InstallationRuntime {
           completedAt,
           bundle: bundle.directory,
           recoveryPointAt: bundle.manifest.recoveryPointAt,
+          lastSuccessful: {
+            completedAt,
+            bundle: bundle.directory,
+            recoveryPointAt: bundle.manifest.recoveryPointAt,
+          },
         },
       });
       await this.startWeb();
@@ -508,7 +542,12 @@ class InstallationRuntime {
       const completedAt = Date.now();
       await writeStatus({
         ...(await readStatus()),
-        backup: { state: 'failed', startedAt, completedAt, error: safeMessage(error) },
+        backup: {
+          ...backupStatus,
+          state: 'failed',
+          completedAt,
+          error: safeMessage(error),
+        },
       });
       if (drained && workerStopped && webStopped) {
         await this.startWeb().catch(() => undefined);

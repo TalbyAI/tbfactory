@@ -28,9 +28,8 @@ const backupInProgress = status.backup?.state === 'running';
 const restoreHoldActive = status.restoreHold?.activated === false;
 const webAvailable = status.web === true;
 const workerAvailable = status.worker === true || restoreHoldActive;
-const expectedServiceStop = backupInProgress || restoreHoldActive;
 
 process.exitCode =
-  status.coordinator === 'running' && (expectedServiceStop || (webAvailable && workerAvailable))
+  status.coordinator === 'running' && (backupInProgress || (webAvailable && workerAvailable))
     ? 0
     : 1;

@@ -14,7 +14,13 @@ type Status = {
   web?: boolean;
   worker?: boolean;
   restoreHold?: { activated: boolean; pendingRuns: number };
-  backup: { state?: string; overdue: boolean; startedAt?: number; completedAt?: number };
+  backup: {
+    state?: string;
+    overdue: boolean;
+    startedAt?: number;
+    completedAt?: number;
+    lastSuccessful?: { completedAt: number; recoveryPointAt?: number; bundle?: string };
+  };
   drill: { state?: string; overdue: boolean; startedAt?: number; completedAt?: number };
 };
 
@@ -32,6 +38,7 @@ type JobReceipt = {
   startedAt: number;
   completedAt?: number;
   durationMs?: number;
+  lastSuccessful?: { completedAt: number };
 };
 
 type SchedulerState = {
@@ -140,20 +147,12 @@ function incidentsFor(status: Status, now: number, state?: SchedulerState): Inci
     });
   const childIncident = childServiceIncident(status);
   if (childIncident) incidents.push(childIncident);
-  if (latestJobState(status.backup, state?.jobs?.backup) === 'failed')
-    incidents.push({
-      key: 'backup-failed',
-      title: incidentTitles['backup-failed'],
-      observedAt: status.backup.completedAt ?? status.backup.startedAt,
-    });
+  const backupFailure = jobFailureIncident('backup', status, state);
+  if (backupFailure) incidents.push(backupFailure);
   if (status.backup.overdue)
     incidents.push({ key: 'backup-overdue', title: incidentTitles['backup-overdue'] });
-  if (latestJobState(status.drill, state?.jobs?.drill) === 'failed')
-    incidents.push({
-      key: 'drill-failed',
-      title: incidentTitles['drill-failed'],
-      observedAt: status.drill.completedAt ?? status.drill.startedAt,
-    });
+  const drillFailure = jobFailureIncident('drill', status, state);
+  if (drillFailure) incidents.push(drillFailure);
   if (status.drill.overdue)
     incidents.push({ key: 'drill-overdue', title: incidentTitles['drill-overdue'] });
   const windowIncident = state ? backupWindowIncident(state, now) : undefined;
@@ -230,15 +229,12 @@ function backupWindowDetails(maximumMs: number, measuredMs: number, running: boo
 
 function childServiceIncident(status: Status): Incident | undefined {
   if (status.coordinator !== 'running') return undefined;
-  const unavailable = [status.web === false && 'web', status.worker === false && 'worker'].filter(
-    Boolean,
-  );
-  if (
-    unavailable.length === 0 ||
-    status.backup.state === 'running' ||
-    status.restoreHold?.activated === false
-  )
-    return undefined;
+  const workerExpected = status.restoreHold?.activated === false;
+  const unavailable = [
+    status.web === false && 'web',
+    status.worker === false && !workerExpected && 'worker',
+  ].filter(Boolean);
+  if (unavailable.length === 0 || status.backup.state === 'running') return undefined;
   return {
     key: 'child-service-unavailable',
     title: incidentTitles['child-service-unavailable'],
@@ -274,9 +270,13 @@ function latestAttempt(status: Status['backup'] | Status['drill'], receipt?: Job
 }
 
 function latestSuccessAt(status: Status['backup'] | Status['drill'], receipt?: JobReceipt) {
+  const retainedStatusSuccess =
+    'lastSuccessful' in status ? status.lastSuccessful?.completedAt : undefined;
   const statusSuccess = status.state === 'succeeded' ? status.completedAt : undefined;
-  const receiptSuccess = receipt?.state === 'succeeded' ? receipt.completedAt : undefined;
-  return Math.max(statusSuccess ?? 0, receiptSuccess ?? 0) || undefined;
+  const receiptSuccess =
+    receipt?.lastSuccessful?.completedAt ??
+    (receipt?.state === 'succeeded' ? receipt.completedAt : undefined);
+  return Math.max(retainedStatusSuccess ?? 0, statusSuccess ?? 0, receiptSuccess ?? 0) || undefined;
 }
 
 function latestJobState(status: Status['backup'] | Status['drill'], receipt?: JobReceipt) {
@@ -285,15 +285,29 @@ function latestJobState(status: Status['backup'] | Status['drill'], receipt?: Jo
   return receiptAt > statusAt ? receipt?.state : (status.state ?? receipt?.state);
 }
 
+function jobFailureIncident(job: 'backup' | 'drill', status: Status, state?: SchedulerState) {
+  const current = status[job];
+  if (latestJobState(current, state?.jobs?.[job]) !== 'failed') return undefined;
+  return {
+    key: `${job}-failed`,
+    title: incidentTitles[`${job}-failed`],
+    observedAt: current.completedAt ?? current.startedAt,
+  };
+}
+
 function jobIsDue(job: 'backup' | 'drill', status: Status, state: SchedulerState, now: number) {
   const receipt = state.jobs?.[job];
   const current = status[job];
   const lastAttempt = latestAttempt(current, receipt);
   const latestState = latestJobState(current, receipt);
-  const retryMs = intervalSetting('FACTORY_SCHEDULE_BACKUP_INTERVAL_MS', dayMs);
+  const retryMs = intervalSetting('FACTORY_SCHEDULE_RETRY_INTERVAL_MS', defaultRetryMs);
   if (latestState === 'running' || latestState === 'failed')
     return lastAttempt === undefined || now - lastAttempt >= retryMs;
-  if (job === 'backup') return lastAttempt === undefined || now - lastAttempt >= retryMs;
+  if (job === 'backup')
+    return (
+      lastAttempt === undefined ||
+      now - lastAttempt >= intervalSetting('FACTORY_SCHEDULE_BACKUP_INTERVAL_MS', dayMs)
+    );
 
   const recoveryPoint = latestSuccessAt(status.backup, state.jobs?.backup);
   if (recoveryPoint === undefined) return false;
@@ -358,7 +372,16 @@ async function runJob(command: 'backup' | 'drill', inheritedIncidents: Incident[
   const state = await readState();
   const incidentsToPreserve = mergeIncidents(inheritedIncidents, unresolvedIncidents(state));
   state.jobs ??= {};
-  state.jobs[command] = { state: 'running', startedAt };
+  const lastSuccessful =
+    state.jobs[command]?.lastSuccessful ??
+    (state.jobs[command]?.state === 'succeeded' && state.jobs[command].completedAt !== undefined
+      ? { completedAt: state.jobs[command].completedAt }
+      : undefined);
+  state.jobs[command] = {
+    state: 'running',
+    startedAt,
+    ...(lastSuccessful ? { lastSuccessful } : {}),
+  };
   await writeState(state);
 
   const execution = runInstallationCommand(command);
@@ -395,7 +418,13 @@ async function runJob(command: 'backup' | 'drill', inheritedIncidents: Incident[
     const durationMs = completedAt - startedAt;
     const next = await readState();
     next.jobs ??= {};
-    next.jobs[command] = { state: 'succeeded', startedAt, completedAt, durationMs };
+    next.jobs[command] = {
+      state: 'succeeded',
+      startedAt,
+      completedAt,
+      durationMs,
+      lastSuccessful: { completedAt },
+    };
     await writeState(next);
     return { job: command, state: 'succeeded', completedAt, durationMs };
   } catch {
@@ -403,7 +432,15 @@ async function runJob(command: 'backup' | 'drill', inheritedIncidents: Incident[
     const durationMs = completedAt - startedAt;
     const next = await readState();
     next.jobs ??= {};
-    next.jobs[command] = { state: 'failed', startedAt, completedAt, durationMs };
+    next.jobs[command] = {
+      state: 'failed',
+      startedAt,
+      completedAt,
+      durationMs,
+      ...(next.jobs[command]?.lastSuccessful
+        ? { lastSuccessful: next.jobs[command].lastSuccessful }
+        : {}),
+    };
     await writeState(next);
     throw new Error(`Scheduled ${command} failed`);
   }

@@ -984,7 +984,7 @@ async function reconcilePublication() {
       publicationEvidenceReads: afterConfirmation.publicationEvidenceReads,
       evidenceFile: publicationEvidenceFile,
       checks: [
-        'Retained uncertainty, bound Review Decision, and provider effect survive restore and restart',
+        'Retained publication uncertainty, bound Review Decision, and provider effect remain bound during recovery',
         'The public Factory API gathers positive provider evidence without another publication effect or AI request',
         'Explicit retry is rejected while positive effect evidence is present',
         'Completed resolution uses the bound provider evidence and confirmedStopped true',
