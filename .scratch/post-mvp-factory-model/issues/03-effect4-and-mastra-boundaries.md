@@ -38,8 +38,7 @@ None - can start immediately.
 Claimed by Codex research effect4 during initial map charting. Research will use
 primary sources and record its evidence in
 [Research Effect 4 and Mastra execution boundaries](../research/effect4-mastra-boundaries.md).
-Work takes place on `research/post-mvp-effect4` in the isolated worktree
-`E:/talby/tbfactory-research-post-mvp-effect4`.
+Work takes place on `research/post-mvp-effect4` in an isolated worktree.
 Research evidence does not approve downstream HITL decisions.
 
 ### Resolution — 2026-10-06
