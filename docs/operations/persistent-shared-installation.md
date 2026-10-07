@@ -7,6 +7,12 @@ directory exercises backup and restore on one host; production still requires an
 independent protected recovery destination and a measured installation-specific
 recovery-time objective.
 
+Native Node is a provisional choice for local verification, confirmed as such by
+the User on 2026-10-07. Choose the deployment shape explicitly before operational
+acceptance. [Issue 12](../../.scratch/factory-mvp/issues/12-persistent-shared-installation.md#manual-work-and-closure-evidence)
+is reopened and records the manual work and evidence required for closure; this
+runbook and prior local checks do not establish that those jobs are deployed.
+
 ## Configure and start
 
 Copy [`.env.example`](../../.env.example) to a protected environment file outside
@@ -55,6 +61,14 @@ the web service refuses Factory operations and `scripts/worker.ts` exits before
 connecting to SurrealDB or claiming worker ownership.
 
 ## Backup and monitoring
+
+Temporary service interruption during backup is accepted for the MVP. Agree a
+maintenance window and measure complete backup duration and web/worker
+interruption until service is available again in the chosen environment. Agree
+and record a maximum total interruption and operator response before Issue 12
+closes. `FACTORY_BACKUP_TIMEOUT_MS` defaults to five minutes per phase; it does
+not cap total interruption. Verify service return, and configure alerting and
+operator action for an exceeded limit or failed shutdown/restart.
 
 Run a backup at least once every 24 hours. Configure the host scheduler to invoke
 the public command below daily and to alert on a nonzero exit code. `status`
@@ -130,6 +144,20 @@ recorded at or before the activation timestamp, including when a recovery point
 contains the observation but lacks a later automatic-start receipt. New
 observations recorded after activation continue through the existing ingestion,
 ownership, and deduplication rules.
+
+This is an accepted MVP limitation: a legitimate observation that never started
+a Run may remain unperformed. `recovery-list` lists existing Runs and does not
+provide an inventory of those observations. The later recovery redesign is
+tracked in [Issue 18](../../.scratch/factory-mvp/issues/18-redesign-durable-recovery.md).
+Existing Run durability remains required. Ordinary restarts preserve human waits
+and completed results; interrupted execution follows the
+[conservative manual-recovery procedure](durable-private-reviews.md#consumption-and-recovery)
+without automatically replaying uncertain AI/provider effects.
+
+The unresolved ownership startup failure is tracked separately in
+[Issue 17](../../.scratch/factory-mvp/issues/17-diagnose-worker-ownership-recovery.md)
+and blocks acceptance of the affected recovery scenario. Do not treat later
+passing repetitions as a diagnosed correction or bypass a live ownership guard.
 
 ```powershell
 npm run installation -- recovery-list

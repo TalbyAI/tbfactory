@@ -1,12 +1,20 @@
 # Persistent shared installation delivery evidence
 
-## Approved scope
+## Local scope and implementation choice
 
-The User selected a locally verifiable native Node installation with a configurable
-recovery destination. Real deployment, independent off-host recovery storage,
+The User selected a locally verifiable installation with a configurable recovery
+destination. Native Node was an implementation choice for that local exercise;
+the User confirmed on 2026-10-07 that it remains provisional, not an approved
+production architecture. Real deployment, independent off-host recovery storage,
 deployed scheduling and alert routing, and an installation-specific measured RTO
 remain pending. A same-host recovery directory and the local timings below do not
 establish disaster recovery or a production RTO.
+
+[Issue 12 was reopened](../issues/12-persistent-shared-installation.md#reopened-after-assumption-review--2026-10-07)
+after the User's assumption review. Its manual closure checklist and the
+[specification closure checklist](../spec.md#mvp-closure-checklist) require executed
+deployment and recovery evidence. The local checks below remain historical results;
+they do not close the ticket or establish complete MVP acceptance.
 
 The [installation design](../designs/persistent-shared-installation.md) records
 the accepted contract; the [runbook](../../../docs/operations/persistent-shared-installation.md)
@@ -81,6 +89,15 @@ The first full invocation passed 178/179 with one worker-ownership startup error
 in the GitHub crash-recovery test. That case passed three isolated repetitions
 and the final full invocation. Its original cause was not established; no
 ownership protection was weakened or speculative fix introduced.
+
+[Issue 17](../issues/17-diagnose-worker-ownership-recovery.md) now tracks causal
+diagnosis and correction. Recovery acceptance remains pending despite the later
+passing invocation. Temporary backup interruption is accepted for the MVP, but
+its measured maximum must be agreed in the chosen environment before Issue 12
+closes. The restored-observation omission is an accepted MVP limitation; the
+broader recovery redesign is deferred in
+[Issue 18](../issues/18-redesign-durable-recovery.md), preserving current Run
+durability and conservative interrupted-execution recovery requirements.
 
 All six implementer worktrees and their auxiliary database containers were
 removed after their changes were integrated. The pre-existing acceptance database
