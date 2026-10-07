@@ -25,9 +25,10 @@ Deliver a runnable shared server/container installation with separate TanStack S
 - [x] Include a small number of Kanban Board/UI scenarios confirming the same rules as the public API, including explicit finalization.
 - [x] Provide the smallest runnable behavioral and operational checks covering the installation and the specification's restart/concurrency scenarios; do not introduce a separate speculative component-test framework or claim production provider exactly-once guarantees.
 
-These checked items retain the delivered local evidence. They do not establish
-deployed operation or diagnose the historical ownership report. The remaining
-closure requirements below must be executed, not merely documented.
+These checked items retain the delivered local evidence. The selected Docker
+evaluation adds executed installation evidence below; it does not diagnose the
+historical ownership report or establish host-loss recovery. Remaining operator
+acceptance requirements must be resolved before closure.
 
 ## Manual work and closure evidence
 
@@ -37,20 +38,24 @@ under `Comments` or in a linked delivery report. Agent assistance may prepare
 configuration and checks; the operator owns installation access, scheduling,
 recovery custody, alert routing, and acceptance of measured operational limits.
 
-- [ ] Choose the installation environment and deployment shape. Configure process
+- [x] Choose the installation environment and deployment shape. Configure process
   supervision, startup order, persistent SurrealDB/LibSQL/Artifact/key-ring paths,
   and restricted access. Verify startup after a host/process restart and rejection
-  of a second worker. Native Node is a provisional local implementation choice,
-  not a User-selected production architecture.
+  of a second worker. The User selected the Docker evaluation on this PC; native
+  Node describes the earlier local implementation, not the chosen runtime.
 - [ ] Configure an independent protected recovery destination and recovery access
   that remains available after losing the active host. Verify retrieval of a
   complete bundle and separately held compatible root-key material without relying
-  on active installation paths or logging secrets.
-- [ ] Install and exercise the daily backup schedule, monthly restore-drill
-  schedule, and retention of at least 30 daily recovery points. Record scheduler
+  on active installation paths or logging secrets. This remains a prerequisite
+  before real deployment. The User-selected same-host Docker volume is the MVP
+  evaluation destination and does not satisfy host-loss recovery.
+- [x] Install and exercise the daily backup schedule, monthly restore-drill
+  schedule, and retention configuration for at least 30 daily recovery points.
+  The evaluation contract permits configuration verification before 30 days
+  have elapsed. Record scheduler
   configuration and actual successful job evidence, including key-ring coverage
   and retained root-key versions. Runnable commands alone do not satisfy this item.
-- [ ] Configure an alert recipient and responsible operator. Exercise failed and
+- [x] Configure an alert recipient and responsible operator. Exercise failed and
   overdue backup/drill conditions and verify delivery of the alerts, not only a
   status field or nonzero exit code.
 - [ ] Agree a backup maintenance window. Measure complete backup duration and
@@ -59,15 +64,15 @@ recovery custody, alert routing, and acceptance of measured operational limits.
   Verify service return and document operator action and alerting when the limit
   is exceeded or shutdown/restart fails. The five-minute default backup timeout
   applies per phase and does not establish a total interruption limit.
-- [ ] Execute an isolated restore using the independent recovery material and
-  separate root-key custody. Record integrity checks, encrypted-secret recovery,
+- [x] Execute an isolated restore using the selected evaluation recovery volume
+  and separately mounted root-key material. Record integrity checks, encrypted-secret recovery,
   two-Organization isolation, private/revoked Artifact access, and retained
   Workflow Run identities, outputs, definition versions, and human waits.
-- [ ] Exercise ordinary restart and interrupted-execution recovery in the chosen
+- [x] Exercise ordinary restart and interrupted-execution recovery in the chosen
   environment. Verify exclusive ownership, continued Fact ingestion, cancellation
   completion, preservation of completed Activities, and provider reconciliation
   without blind replay. Keep unknown AI outcomes counted and unreplayed.
-- [ ] Exercise the restore hold, explicit dispositions for existing nonterminal
+- [x] Exercise the restore hold, explicit dispositions for existing nonterminal
   Workflow Runs, and activation after operator reconciliation. Record the accepted
   MVP limitation: pre-activation external observations do not automatically start
   new Review Workflows, and `recovery-list` does not enumerate observations lacking
@@ -75,8 +80,9 @@ recovery custody, alert routing, and acceptance of measured operational limits.
 - [ ] Record the actual recovery destination, recovery point, measured restore
   duration, and an agreed installation-specific recovery-time objective. Check the
   daily-backup recovery-point objective of at most 24 hours against scheduling and
-  failure monitoring. Same-host drill timings are not deployment acceptance.
-- [ ] Complete applicable package checks on the accepted revision and record the
+  failure monitoring. Evaluation timings are measured below; agreement remains
+  pending and same-host drills do not establish real deployment acceptance.
+- [x] Complete applicable package checks on the evaluated revision and record the
   results with the installation evidence. The suspended diagnostic in
   [Issue 17](17-diagnose-worker-ownership-recovery.md) has no claimed correction;
   preserve its ownership guard and historical report. This disposition does not
@@ -102,7 +108,8 @@ The User selected Docker on the current PC for the MVP evaluation, including
 SurrealDB and all other dependencies. The User is the installation operator.
 Use a dedicated Docker volume for backup and restore verification, and SMTP4Dev
 as the mock operator inbox. These choices supersede the unresolved selection
-fields in the earlier preparation record. Measurements remain pending.
+fields in the earlier preparation record. Measurements and executed evidence are
+recorded in the [Docker evaluation report](../evidence/docker-evaluation.md).
 
 The [Docker evaluation contract](../designs/docker-evaluation.md) records the
 implementation and verification plan. Same-host volume recovery is the selected
@@ -112,16 +119,16 @@ and restore time before agreeing their operational limits with the operator.
 
 | Acceptance item | Recorded local value or contract | Required installation value / evidence |
 | --- | --- | --- |
-| Responsible operator | The User is the MVP evaluation operator, as selected on 2026-10-07. | Record execution dates, accepted revision, and evidence location. |
-| Host and deployment shape | Docker Desktop on the current Windows PC, `DESKTOP-34DS59F`; observed Engine 29.5.3 and Compose 5.1.4. Factory and dependencies run in containers. | Record supervision, network exposure, persistent paths, restricted access, startup order, and second-worker rejection. |
-| Local database endpoint | Historical coordinator evidence records `ws://127.0.0.1:18012/rpc`, namespace `acceptance`; it is an ephemeral local test destination. | Record the chosen installation's nonsecret destination details and host/service restart evidence. |
-| Recovery destination and access | The User selected a dedicated Docker volume for local backup and restore verification. Root-key material remains separate from bundles. | Record the volume and isolated restore evidence. Independent retrieval after active-host loss remains required before real deployment and is not established by this evaluation. |
-| Backup and drill schedules | Commands exist for daily backup and monthly restore drill; local code retains all valid recovery points. | Record deployed scheduler configuration, at least 30 daily points, key-ring coverage, root-key version retention, and successful scheduled job evidence. |
-| Alerts and operator response | The User selected SMTP4Dev as the mock operator inbox. | Configure the evaluation recipient and record delivered failed and overdue backup/drill alerts and SMTP retry behavior. |
-| Backup interruption | Temporary backup interruption is accepted for the MVP. The five-minute timeout applies per phase and is not a total interruption limit. | Measure complete backup and service interruption in the chosen environment; record the agreed maximum, maintenance window, service return, and response if exceeded or restart fails. |
-| Recovery point objective | The documented daily-backup target is at most 24 hours. | Verify the deployed schedule and failure monitoring meet that target and record the recovery point. |
-| Restore duration and recovery-time objective | Historical same-host restore drill evidence records `durationMs: 4989`; it is not a production measure. | Record the independent restore duration and agree the installation-specific recovery-time objective with the operator. |
-| Existing Workflow Run recovery | Local checks record retained identities, human waits, explicit restore-hold dispositions, and conservative provider recovery. | Exercise ordinary restart, interrupted-execution recovery, restore hold, ownership, cancellation, and provider reconciliation on the chosen installation; retain unknown AI calls without replay. |
+| Responsible operator | The User is the MVP evaluation operator, as selected on 2026-10-07. Codex executed the linked checks on their behalf that day. | Evaluated application revision `29ee73c`; [Docker evidence](../evidence/docker-evaluation.md). Operational limits await operator acceptance. |
+| Host and deployment shape | Docker Desktop on the current Windows PC, `DESKTOP-34DS59F`; Engine 29.5.3 and Compose 5.1.4. Factory and dependencies run in containers. | Supervised separate web/worker processes, loopback exposure, persistent volumes, startup order, second-worker rejection, and container/database restart were exercised. |
+| Local database endpoint | Internal `ws://database:8000/rpc`, namespace `factory_evaluation`, database `factory`; no database host port. | Persistent SurrealDB volume survives database restart. Test suites use a separate container and namespace. |
+| Recovery destination and access | `tbfactory-mvp-docker-recovery`, with bundles under `/var/lib/factory/recovery`; separate read-only `tbfactory-mvp-docker-root-key` mount. | Fresh isolated namespace/volume restore and explicit activation passed. Host-loss retrieval and off-host root-key custody remain prerequisites before real deployment. |
+| Backup and drill schedules | Installed daemon polls every minute, backs up every 23 hours, retries failure every five minutes, and drills calendar-monthly. All valid bundles/key versions are retained. | Actual scheduled backup and drill commands succeeded. Retention configuration is verified; thirty elapsed days of history are not claimed. |
+| Alerts and operator response | SMTP4Dev captures unrelayed messages to `operator@example.test`; the User operates the MVP. | Eight captured notices cover failed/overdue jobs, unavailable coordinator/child, and exceeded backup window. SMTP retry and deduplication passed. |
+| Backup interruption | Complete commands measured roughly 7–14 seconds; sampled web interruption up to 2524 ms. | Proposed maximum total backup window: two minutes, any time the PC is running. Operator agreement is pending; the normal threshold remains unset. A temporary 100 ms check delivered an alert while backup still ran. |
+| Recovery point objective | At most 24 hours; latest measured point `1791390894932` (`2026-10-07T16:34:54.932Z`). | 23-hour cadence leaves polling/capture margin; overdue monitoring uses the last successful capture point. Host downtime or persistent failure can still breach the objective and require operator response. |
+| Restore duration and recovery-time objective | Isolated restore: 4085 ms; inspection, two dispositions, startup and activation: 28303 ms. | Proposed evaluation recovery-time objective: five minutes. Operator agreement is pending. These measurements do not establish host-loss recovery. |
+| Existing Workflow Run recovery | Retained two private reports/human waits and definitions; explicit restore dispositions and activation; Board cancellation/finalization; provider reconciliation after restart. | The controlled uncertain publication retained one provider effect and was resolved from positive evidence without duplicate POST or additional AI request. No production exactly-once claim or Issue 17 correction is made. |
 | Ownership diagnostic | The first historical full-suite invocation reported one startup error; later repetitions and the final suite passed without a causal diagnosis or correction. [Issue 17](17-diagnose-worker-ownership-recovery.md) is open with `needs-info` status and `suspended` label. | Preserve all ownership protections. This diagnostic is not a current blocker; the installation-specific ownership and confirmed-stop checks above remain required. |
 
 ## Blocked by
@@ -262,3 +269,38 @@ current PC, on `integration/factory-mvp-acceptance`. The User remains the operat
 Containerization and operational scheduling are separate implementation increments
 under this ticket. The active host, operator, backup target, and mock alert channel
 are selected; execution evidence and measured limits are not yet accepted.
+
+### Docker evaluation executed — 2026-10-07
+
+The [Docker evaluation evidence](../evidence/docker-evaluation.md) records the
+User-selected installation, application revision `29ee73c`, protected volume
+layout, public OIDC access, two retained Reviews, Factory/database restart,
+exclusive ownership, isolated restore/activation, encrypted-secret recovery,
+private/revoked Artifact access, continued provider ingestion, Board cancellation
+and separate finalization, and uncertain-publication reconciliation retaining one
+provider effect without a blind duplicate or additional AI request.
+
+The installed daily/monthly scheduler succeeded through its public commands and
+SMTP4Dev captured eight unrelayed notices with failure retry and deduplication.
+Complete backup commands measured about 7–14 seconds; sampled web interruption
+was at most 2524 ms. Isolated restore took 4085 ms, or 28303 ms including inspection,
+two explicit Workflow Run dispositions, startup, and activation. The final image
+also recovered a proven stale Unix control socket in ordinary startup without
+operator deletion or removal of worker ownership protections. This correction
+does not diagnose the suspended historical Issue 17.
+
+The requirement-to-evidence index now links executed Docker results and retains
+historical evidence. The operator has not yet accepted the proposed two-minute
+total backup window, scheduling at any time while the PC is running, or five-minute
+evaluation recovery-time objective. `FACTORY_BACKUP_MAX_TOTAL_MS` is unset in
+regular operation. The ticket and parent specification remain open for that
+acceptance. Same-host recovery and configured retention
+do not establish host-loss recovery or thirty elapsed days of history; independent
+recovery access and off-host root-key custody remain required before real deployment.
+
+Final root verification on application revision `29ee73c` passed: the complete
+suite reported 196 passes, zero failures/cancellations and one expected Windows
+skip across 197 tests. The Unix socket case separately passed `1/1` in the final
+Linux Docker image. Build, typecheck, image build, formatting, local source/anchor
+and 70-story index checks, and diff checks passed. The full suite used an isolated
+test database; the evaluation installation remains available with persistent data.

@@ -5,8 +5,8 @@
 The User selected this evaluation on 2026-10-07 and is the responsible operator.
 Codex executed the checks on their behalf on `DESKTOP-34DS59F`, using Docker Desktop
 Engine 29.5.3 and Compose 5.1.4. Implementation is on
-`integration/factory-mvp-acceptance`. Record the accepted code revision and final
-package checks after integration verification finishes.
+`integration/factory-mvp-acceptance`. The evaluated application revision is
+`29ee73cdec7f18ec63dd197512554c60438171e5`; final package results are recorded below.
 
 The [evaluation contract](../designs/docker-evaluation.md) and
 [Docker runbook](../../../docker/evaluation/README.md) describe the installation.
@@ -20,6 +20,14 @@ controlled boundary `18082`, and SMTP4Dev inbox `18085`. SurrealDB has no host p
 The Factory hostname is stable, and the existing single-worker ownership guard
 remains enabled. The trusted Factory worker can use the Docker socket; its review
 sandboxes receive no Factory volumes or Docker socket.
+
+Available access is local to this PC: Docker Engine/Compose commands, the Factory
+at `http://127.0.0.1:18030`, evaluation OIDC as `alice@example.test`, and the
+SMTP4Dev inbox at `http://127.0.0.1:18085`. The fixture identity has Membership in
+`alpha` and `beta`. The mock recipient is `operator@example.test`. No external
+hosting account, production provider/AI credential, live SMTP relay, or off-host
+recovery access is required or claimed for this evaluation. Protected root-key
+material stays in its separate Docker volume; its bytes are not in this report.
 
 ## Executed installation checks
 
@@ -105,8 +113,169 @@ and waits for database readiness. This fixture correction does not establish the
 cause of that invocation's GitHub failure or diagnose Issue 17. Issue 17 remains
 open and suspended, with no ownership correction claimed.
 
-Final full-suite checks, explicit uncertain-publication recovery, Board
-finalization, installed scheduler receipts, operational window alerting, and
-operator agreement on limits remain to be recorded before this evaluation can
-be accepted. The dedicated same-host volumes do not demonstrate host-loss
-recovery, 30 elapsed days of backup history, or real deployment acceptance.
+The executed checks below supplement the initial installation evidence.
+Operator agreement on limits remains required before evaluation acceptance.
+The dedicated same-host volumes do not demonstrate host-loss recovery,
+30 elapsed days of backup history, or real deployment acceptance.
+
+## Executed recovery, Board, and scheduler checks
+
+On 2026-10-07, the controlled provider durably saved one publication effect and
+then dropped its response. Factory recorded an uncertain outcome. The complete
+backup command took `7396 ms`, sampled web interruption was `1725`–`1944 ms`,
+and the subsequent restore drill took `3929 ms`. Factory, SurrealDB, and the
+provider boundary were restarted. An immediate login during startup failed;
+after readiness, the ordinary OIDC login and retained identities were available.
+
+Factory's public reconciliation gathered positive provider evidence, rejected a
+duplicate retry, and accepted an explicit completed resolution with
+`confirmedStopped: true`. The provider retained exactly one effect. No additional
+AI request occurred during this recovery. The provider boundary's in-memory
+request counters reset when its container restarted; the persistent effect journal
+and Factory Facts supplied the retained-effect evidence. These controlled checks
+do not establish exactly-once behavior at a production provider.
+
+The alpha Work Item remained `ready-for-review` after the Review Workflow and
+publication completed. The User interface separately requested the Review
+Finalization Workflow. That Workflow Run completed and moved Factory state to
+`completed`, retaining the original report, Review Decision, publication, and
+state-flow version. It survived the later service recovery.
+
+Authenticated GitHub and Azure DevOps observations after restart appended Facts
+to distinct new Work Items. Repeated deliveries reused the same Work Item and
+Fact identities without changing Factory state. On the Kanban Board, the new
+GitHub Review Intake Workflow waited for missing Git inputs, blocked competing
+transitions, and released ownership only after worker-confirmed cancellation.
+The two original reports remained private and retained their identities.
+
+Nonsecret receipts are `.runtime/docker-ingestion-evidence.json`,
+`.runtime/docker-board-cancellation.json`, `.runtime/docker-board-finalization.json`,
+`.runtime/docker-uncertain-backup-measurement.json`, and
+`.runtime/docker-evaluation/uncertain-publication-acceptance.json`.
+
+The installed scheduler's public backup and drill commands both succeeded.
+Under concurrent test load, their complete command receipts recorded `14210 ms`
+and `6949 ms`. The daemon runs the daily cadence and calendar-monthly drill,
+polling once per minute. The dedicated volume retains all valid bundles and
+compatible key versions; no pruning is configured. This verifies retention
+configuration, not thirty elapsed days of history. Docker and the PC must remain
+running for scheduled operation. Successful job and resolved incident receipts
+are in `.runtime/docker-scheduler-success.json`.
+
+A one-shot negative check used `FACTORY_BACKUP_MAX_TOTAL_MS=100`. SMTP4Dev accepted
+the window alert at `1791388367255`, before the backup completed at
+`1791388374389`. The command succeeded after `7375 ms`; the alert did not cancel
+the operation or clear ownership. The threshold was confined to that test and
+remains unset in the regular Compose configuration pending operator agreement.
+
+Forcing only the web child to exit left the worker running. The public status
+reported `web: false`, the health helper returned failure, and SMTP4Dev accepted
+the child-service alert. Conservative shutdown then stopped the worker but
+refused the already-dead web's graceful-close claim. The operator check confirmed
+zero worker owners and no worker lock before forcing the remaining coordinator
+to stop. Its stale Unix control socket was removed while Factory was stopped;
+ownership records were not removed. This exposed the startup regression addressed
+by the final review correction. Record its automated regression and fresh live
+recovery check with the accepted revision.
+
+SMTP4Dev displayed eight captured messages, including the original failed/overdue
+checks, the pending-backup window alert, child-service failure, and a new
+coordinator outage during this negative exercise. Every message was addressed to
+`operator@example.test` and remained unrelayed. Recovered-service checks reported
+no active incidents. Evidence is `.runtime/docker-child-health-evidence.json`
+and `.runtime/docker-final-mail.json`.
+
+## Final integration review and verification
+
+The two-axis review compared `9cdaeb6...48a48ae`. One implementer corrected every
+finding in `29ee73c`, together with the independently reproduced stale Unix
+control socket regression. The historical Issue 17 remains undiagnosed.
+
+### Standards review
+
+The review checked repository instructions, accepted domain and architecture
+decisions, and the full Fowler code-smell baseline. It found three shorthand
+domain terms and a small duplicated failed-job incident branch. The correction
+uses the canonical Workflow Run term and shares the failed-job incident helper.
+No other standards finding was reported.
+
+### Specification review
+
+The review found that a failed backup could wait another full daily interval
+before retry, and that a restore hold suppressed web-process failure as well as
+the expected worker absence. Failed or stale-running jobs now retry every five
+minutes. Coordinator status retains the last successful capture point through
+later attempts and uses it for recovery-point age. An unactivated restore hold
+permits an absent worker while still requiring the maintenance web process.
+Scheduler regression checks passed `15/15`; the public coordinator test passed
+`1/1` against a separate test namespace. These changes do not guarantee a daily
+recovery point during persistent failure or host downtime.
+
+### Additional startup correction
+
+Linux startup refuses a live control socket and removes only a proven stale Unix
+socket. It never removes worker ownership records or locks. The fresh final Docker
+image passed the Linux socket regression `1/1`, with no skip. This tests active
+listener refusal, recovery after a killed listener, rebinding, and unchanged
+ownership markers. Evidence is `.runtime/docker-final-linux-socket-test.log`.
+
+The rebuilt image is
+`sha256:42ae3f8516dd8b41d18a55e1c3c8152ff4a70e70ded53e85b48370e633f6b231`.
+After cleanly stopping the Factory, a disposable listener left a stale control
+socket in the recovery volume. Ordinary Compose startup recovered it without
+operator deletion and became healthy in `16153 ms`. Web and worker were live;
+public OIDC retained both Organization identities. Evidence is
+`.runtime/docker-final-startup-check.json`.
+
+On this image, the installed public scheduler commands completed backup in
+`7021 ms` and drill in `5491 ms`. The coordinator retained capture point
+`1791390894932` and its `lastSuccessful` receipt. A health check had no active
+incident or delivery attempt; the scheduler daemon resumed and the inbox stayed
+at eight unrelayed messages. A fresh browser navigation confirmed the completed
+alpha Work Item, original report and Workflow Run identities, separate completed
+finalization, private Artifact `200`, and cross-Organization denial `404`.
+The boundary still retained one provider effect and received no additional AI
+request. Receipts are `.runtime/docker-final-scheduled-backup.log`,
+`.runtime/docker-final-scheduled-drill.log`, `.runtime/docker-scheduler-success.json`,
+and `.runtime/docker-final-board-verification.json`.
+Beta also retained its original private report and completed Review Workflow,
+with two retained consumption records and no publication. Its receipt is
+`.runtime/docker-final-beta-verification.json`.
+
+The second full-suite invocation was interrupted after worktree cleanup followed
+a dependency junction and damaged the shared host `node_modules`. A focused check
+reported missing `@ai-sdk/provider-utils-v6`. Reinstalling from the unchanged
+lockfile restored dependencies; the affected positive-provider-evidence check
+then passed `1/1`. This invocation is not a passing product suite. Its log is
+`.runtime/factory-mvp-docker-tests-aborted-dependencies.log`; the subsequent check
+is `.runtime/docker-restored-dependencies-check.log`.
+
+### Final package results
+
+The fresh complete suite on application revision `29ee73c` exited successfully:
+`197` tests, `196` passed, `0` failures or cancellations, and `1` expected Windows
+skip, in `1471961 ms`. The skipped Unix socket case passed separately in the
+final Linux Docker image (`1/1`, no skips). The suite used the separate persistent
+test container `tbfactory-mvp-tests-db`, endpoint `ws://127.0.0.1:18000/rpc`, and
+namespace `docker_acceptance_suite`; it did not use the evaluation database.
+The complete log is `.runtime/factory-mvp-docker-tests.log`.
+
+Fresh `npm run typecheck`, `npm run build`, Docker image build, formatting checks,
+and `git diff --check` passed. Their receipts are
+`.runtime/docker-final-typecheck.log`, `.runtime/docker-final-build.log`,
+`.runtime/docker-final-image-build.log`, and
+`.runtime/docker-evidence-format-check.log`. Local link/heading checks cover all
+11 affected Markdown files and all 70 User Story IDs without a missing source
+or anchor. The final documentation commit changes no evaluated application code.
+
+### Acceptance still required
+
+The evaluation is running with persistent volumes and the scheduler daemon.
+The User remains the operator. Issue 12 and the parent specification stay open
+for agreement on the proposed two-minute total backup window, an unrestricted
+window while the PC is running, and the five-minute evaluation recovery-time
+objective. The regular backup-window threshold remains unset. Same-host volumes
+and this small dataset do not establish host-loss recovery, thirty elapsed days
+of history, or production recovery estimates. Independent recovery access and
+off-host root-key custody remain prerequisites before real deployment. Issue 17
+remains suspended and undiagnosed; Issues 16 and 18 remain explicitly deferred.

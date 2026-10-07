@@ -87,6 +87,14 @@ docker compose -f docker/evaluation/compose.yaml exec factory node --import tsx 
 SMTP4Dev captures failed or overdue job notices for inspection. The stack does
 not automatically run a negative alert check during ordinary startup.
 
+The regular scheduler leaves `FACTORY_BACKUP_MAX_TOTAL_MS` unset pending the
+operator's agreement on a total backup window. Once agreed, add that positive
+millisecond value to the scheduler environment and recreate the scheduler. The
+limit measures the full command through service return, not a per-phase timeout.
+An exceeded-window notice is sent while a backup is still running; it does not
+cancel the backup or clear ownership. Inspect status and follow the recovery
+procedure if the service does not return.
+
 Restart the Factory to exercise the same persistent stores:
 
 ```powershell
