@@ -2,7 +2,7 @@
 
 Status: ready-for-agent
 Labels: wayfinder:map
-State: open
+State: closed
 
 ## Destination
 
@@ -18,7 +18,7 @@ Teams need to automate complex work with agents and humans while retaining contr
 
 The Factory must preserve those distinctions across GitHub and Azure DevOps, independent Organizations, long human waits, process restarts, and deployments. Users need a trustworthy history, private Artifacts, and publication that does not silently repeat an external Activity after an uncertain response.
 
-The repository contains the domain glossary, accepted foundations, and ten accepted ADRs. The isolated storage-feasibility investigation has executed checks and recorded its selected provider and dependency pins in the linked ticket. The application and local installation increments have been delivered; deployment acceptance remains open. The historical worker-ownership startup report is unexplained and suspended pending reproducible reporting conditions, with no correction claimed. This specification translates the accepted foundation into MVP behavior and acceptance requirements without inventing the detailed designs explicitly reserved for follow-up specifications.
+The repository contains the domain glossary, accepted foundations, and ten accepted ADRs. The isolated storage-feasibility investigation has executed checks and recorded its selected provider and dependency pins in the linked ticket. The application and local installation increments have been delivered; the User-selected Docker evaluation is accepted. The historical worker-ownership startup report is unexplained and suspended pending reproducible reporting conditions, with no correction claimed. This specification translates the accepted foundation into MVP behavior and acceptance requirements without inventing the detailed designs explicitly reserved for follow-up specifications.
 
 ## Solution
 
@@ -191,12 +191,12 @@ deployment-specific restart and recovery checks.
 - Verify Factory-authorized Artifact access and denial after the sharing limit, expiry where selected, or revocation defined by the follow-up design. Verify configured AI model restrictions and time/call-count limits through observable acceptance, refusal, or stopping behavior according to that design.
 - **Confirmed separate adapter feasibility seam:** use the candidate adapter's public Workflow Run persistence/resume operations against persistent SurrealDB. Complete a step, suspend for human input, capture the run identifier, terminate the application process, and load/resume the same run in a fresh process. Assert output retention and no repeat of completed work. Repeat with a database restart against the same data.
 - The adapter prototype must also verify parallel steps within a run, concurrent runs for different Work Items, retained snapshot results, and recorded simulated external effects. Record exact versions, checks, failures, and effort within one working day. Passing storage checks does not validate Factory authorization, exclusive ownership, or real provider publication recovery.
-- **Prior art:** the isolated storage prototype provides runnable public-framework checks and recorded restart/concurrency evidence. The authenticated Work Item increment and subsequent Review Workflow, provider, publication, cancellation, finalization, migration, and installation increments record local public-operation, Board/UI, restart, and recovery checks in their linked resolutions. Those historical local results are supplemented by the executed Docker installation checks linked from Issue 12; operator agreement on measured limits remains pending. Reuse public framework operations where feasible rather than introduce a new testing abstraction.
+- **Prior art:** the isolated storage prototype provides runnable public-framework checks and recorded restart/concurrency evidence. The authenticated Work Item increment and subsequent Review Workflow, provider, publication, cancellation, finalization, migration, and installation increments record local public-operation, Board/UI, restart, and recovery checks in their linked resolutions. Those historical local results are supplemented by the executed Docker installation checks linked from Issue 12; the operator accepted measured evaluation limits on 2026-10-08. Reuse public framework operations where feasible rather than introduce a new testing abstraction.
 - Concrete test tools and fixtures are follow-up implementation choices. Begin with the smallest runnable behavioral checks that cover the selected increment; avoid a speculative collection of component-level suites.
 
 ## Decisions so far
 
-- [Docker evaluation on the current PC](designs/docker-evaluation.md): the User selected Docker for the Factory and dependencies, acts as operator, and chose a Docker backup volume and SMTP4Dev mock inbox. The [executed evaluation](evidence/docker-evaluation.md) verifies the chosen runtime and records measured backup/restore limits awaiting operator agreement; same-host results do not establish recovery after host loss or real deployment readiness.
+- [Docker evaluation on the current PC](designs/docker-evaluation.md): the User selected Docker for the Factory and dependencies, acts as operator, and chose a Docker backup volume and SMTP4Dev mock inbox. The [executed evaluation](evidence/docker-evaluation.md) verifies the chosen runtime and records the accepted two-minute backup window and five-minute recovery-time objective; same-host results do not establish recovery after host loss or real deployment readiness.
 
 - [Reopen installation acceptance after assumption review](issues/12-persistent-shared-installation.md#reopened-after-assumption-review--2026-10-07): local installation remains delivered; ticket and specification stay open until manual deployment/recovery checks are completed. Node is provisional locally, MVP backup interruption is accepted subject to measured limits, and the broader recovery redesign is deferred.
 
@@ -244,8 +244,8 @@ checkout. The [Docker evaluation evidence](evidence/docker-evaluation.md) adds
 executed checks on the User-selected installation and records the fresh package
 verification separately from historical results. Generated
 `.runtime/` logs and browser JSON referenced by older resolutions are ignored local
-artifacts, not committed evidence. Issue 12 remains open for operator agreement
-on the measured evaluation limits. Same-host recovery does not establish
+artifacts, not committed evidence. Issue 12 is closed for the User-selected Docker evaluation with operational
+limits accepted on 2026-10-08. Same-host recovery does not establish
 independent recovery after host loss, which remains required before real deployment.
 
 | User Stories declared by ticket | Ticket, design, and evidence sources | Evidence state and remaining limit |
@@ -261,7 +261,7 @@ independent recovery after host loss, which remains required before real deploym
 | 36, 39, 43–45 | [Issue 09 resolution](issues/09-confirmed-workflow-run-cancellation.md#resolution--2026-10-06), [cancellation design](designs/confirmed-workflow-run-cancellation.md), [review/cancellation tests](../../tests/reviews.test.ts), and [publication/cancellation tests](../../tests/publications.test.ts). | Historical cancellation evidence is supplemented by [Docker Board cancellation](evidence/docker-evaluation.md#executed-recovery-board-and-scheduler-checks): competing transitions remain blocked until worker-confirmed stop releases ownership. |
 | 13, 17–18, 34–35, 39 | [Issue 10 resolution](issues/10-separate-review-finalization.md#resolution--2026-10-06), [finalization design](designs/separate-review-finalization.md), and [public-flow finalization tests](../../tests/finalization.test.ts). | Historical finalization checks are supplemented by the [Docker Board exercise](evidence/docker-evaluation.md#executed-recovery-board-and-scheduler-checks): Review/publication completion leaves Factory state unchanged until a separately requested Review Finalization Workflow completes. |
 | 64–66 | [Issue 11 resolution](issues/11-retained-versions-and-explicit-migration.md#resolution--2026-10-06), [migration design](designs/retained-versions-and-explicit-migration.md), and [migration tests](../../tests/type-migrations.test.ts). | Historical explicit-migration checks remain linked. The [Docker evaluation](evidence/docker-evaluation.md) retains Workflow Run, report, output, wait, and state-flow versions through restart and isolated restore. |
-| 41–42, 50, 62, 65–68 | [Issue 12 current record](issues/12-persistent-shared-installation.md#prepared-deployment-acceptance-record), [Docker evaluation](evidence/docker-evaluation.md), [installation design](designs/persistent-shared-installation.md), [operations runbook](../../docs/operations/persistent-shared-installation.md), and sources [coordinator](../../tests/installation-coordinator.test.ts), [scheduler](../../tests/installation-schedule.test.ts), [Docker acceptance driver](../../tests/docker-evaluation-acceptance.ts), [drain](../../tests/installation-drain.test.ts), [maintenance](../../tests/installation-maintenance.test.ts), [provider observations](../../tests/installation-observations.test.ts), and [Board finalization](../../tests/finalization.test.ts). | The User selected Docker on this PC, acts as operator, and chose a backup volume and SMTP4Dev. Executed evidence covers separate processes, persistent stores, startup/restart, isolated restore/hold/activation, private/revoked Artifact access, retained Workflow Runs/definitions, jobs/alerts, ingestion, cancellation, uncertain publication, and Board finalization. Backup-window and recovery-time limits await agreement; independent host-loss recovery remains required before real deployment. |
+| 41–42, 50, 62, 65–68 | [Issue 12 current record](issues/12-persistent-shared-installation.md#prepared-deployment-acceptance-record), [Docker evaluation](evidence/docker-evaluation.md), [installation design](designs/persistent-shared-installation.md), [operations runbook](../../docs/operations/persistent-shared-installation.md), and sources [coordinator](../../tests/installation-coordinator.test.ts), [scheduler](../../tests/installation-schedule.test.ts), [Docker acceptance driver](../../tests/docker-evaluation-acceptance.ts), [drain](../../tests/installation-drain.test.ts), [maintenance](../../tests/installation-maintenance.test.ts), [provider observations](../../tests/installation-observations.test.ts), and [Board finalization](../../tests/finalization.test.ts). | The User selected Docker on this PC, acts as operator, and chose a backup volume and SMTP4Dev. Executed evidence covers separate processes, persistent stores, startup/restart, isolated restore/hold/activation, private/revoked Artifact access, retained Workflow Runs/definitions, jobs/alerts, ingestion, cancellation, uncertain publication, and Board finalization. The operator accepted a two-minute backup window and five-minute recovery-time objective; independent host-loss recovery remains required before real deployment. |
 
 Several tickets intentionally claim overlapping stories because they validate
 different parts of the same requirement. Issues 13–15 record AI-provider and
@@ -280,7 +280,7 @@ research](research/mastra-ai-provider-contracts.md), [local sandbox research](re
 | Uncertain provider outcome, evidence gathering, human resolution, and no blind replay | [publications](../../tests/publications.test.ts), [publication corrections](../../tests/publication-corrections.test.ts), [Approval recovery](../../tests/publication-approval-recovery.test.ts), and [Issue 07 resolution](issues/07-confirmed-publication-and-reconciliation.md#resolution--2026-10-05). | The [Docker evaluation](evidence/docker-evaluation.md#executed-recovery-board-and-scheduler-checks) durably records provider success followed by a lost response, restarts services, gathers positive provider evidence, rejects duplicate retry, and resolves completion explicitly. This controlled boundary does not establish production exactly-once effects. |
 | Private Artifact access, revocation, AI configuration, model limits, and sandbox boundaries | [Artifact sharing](../../tests/artifact-sharing.test.ts), [sharing revalidation](../../tests/sharing-revalidation.test.ts), [secrets](../../tests/secrets.test.ts), [reviews](../../tests/reviews.test.ts), [Issue 05](issues/05-durable-private-review-report.md), [Issue 08](issues/08-limited-report-artifact-sharing.md), [Issue 13](issues/13-mastra-ai-provider-contracts.md), [Issue 14](issues/14-mastra-local-sandbox-contract.md), and [Issue 15](issues/15-mastra-docker-sandbox-contract.md). | Historical policy/budget tests remain linked. The [Docker evaluation](evidence/docker-evaluation.md) uses real restricted Docker sandboxes and tool/AI exchanges, isolated Organization configuration, private/revoked Artifact checks, and encrypted backup/restore. Production provider credentials remain outside evaluation scope. |
 | Mastra storage adapter process/database restart and concurrency feasibility | [Issue 01 resolution](issues/01-validate-durable-workflow-storage.md#resolution--2026-10-02), [prototype runner](../../prototypes/durable-workflow-storage/README.md), and [executed report](../../prototypes/durable-workflow-storage/evidence/cd3afef2-c6dc-4043-9874-0b9583f0826f.json). | The bounded local evaluation is complete and selected LibSQL after recording candidate concurrency failure. It does not verify Factory authorization, publication recovery, or deployed storage operations. |
-| Backup schedule, independent recovery, alerts, interruption, RPO/RTO, and deployed restore | [Issue 12 manual checklist and current record](issues/12-persistent-shared-installation.md#prepared-deployment-acceptance-record), [Docker runbook](../../docker/evaluation/README.md), [Docker evidence](evidence/docker-evaluation.md), [scheduler tests](../../tests/installation-schedule.test.ts), and [installation runbook](../../docs/operations/persistent-shared-installation.md). | Installed daily/monthly jobs succeeded; SMTP4Dev received failed/overdue and service/window alerts with retry/deduplication. Measured backup and isolated restore timings await operator agreement. Retention configuration is verified, not thirty elapsed days. Same-host volume/root-key recovery does not meet host-loss recovery prerequisites for real deployment. |
+| Backup schedule, independent recovery, alerts, interruption, RPO/RTO, and deployed restore | [Issue 12 manual checklist and current record](issues/12-persistent-shared-installation.md#prepared-deployment-acceptance-record), [Docker runbook](../../docker/evaluation/README.md), [Docker evidence](evidence/docker-evaluation.md), [scheduler tests](../../tests/installation-schedule.test.ts), and [installation runbook](../../docs/operations/persistent-shared-installation.md). | Installed daily/monthly jobs succeeded; SMTP4Dev received failed/overdue and service/window alerts with retry/deduplication. The operator accepted the measured results with a two-minute backup window and five-minute recovery-time objective. Retention configuration is verified, not thirty elapsed days. Same-host volume/root-key recovery does not meet host-loss recovery prerequisites for real deployment. |
 
 Issue 16's manual provider correspondence and Issue 18's broader recovery redesign
 remain explicitly deferred. That deferral does not postpone current Workflow Run
@@ -290,21 +290,20 @@ not a current blocker; no diagnosis or correction is claimed.
 
 ## MVP closure checklist
 
-The User confirmed these closure gates on 2026-10-07. This specification remains
-open while installation acceptance is incomplete. A list of commands or a passing local suite
+The User confirmed these closure gates on 2026-10-07. The User-selected Docker evaluation is accepted on 2026-10-08. A list of commands or a passing local suite
 does not substitute for executed installation work.
 
 - [x] Record [Issue 17's current disposition](issues/17-diagnose-worker-ownership-recovery.md#user-directed-suspension--2026-10-07): open with `Status: needs-info` and `suspended` label, cause unknown, no correction claimed, and ownership protections retained. It is not a current blocker for this map.
-- [ ] Execute and record the installation and recovery work in
+- [x] Execute and record the installation and recovery work in
   [Issue 12's manual closure checklist](issues/12-persistent-shared-installation.md#manual-work-and-closure-evidence):
-  deployment/supervision/volumes, independent recovery access and root-key custody,
+  deployment/supervision/volumes, selected recovery access and separate root-key material,
   actual backup/drill schedules and retention, delivered failure/overdue alerts,
   measured and agreed interruption/RTO, isolated restore, and existing-Run recovery.
   Those installation checks are prerequisites for both Issue 12 and this map;
   neither document requires the other to be closed first.
   The User-selected Docker evaluation has executed same-host recovery, installed
   jobs/alerts, retention configuration, and interrupted-execution checks. Its
-  remaining evaluation gate is operator agreement on measured limits; independent
+  measured limits were accepted by the operator on 2026-10-08; independent
   host-loss retrieval and off-host root-key custody remain required before real
   deployment and are not claimed by this evaluation.
 - [x] Prepare a requirement-to-evidence index for all 70 User Stories and the
@@ -313,7 +312,7 @@ does not substitute for executed installation work.
 - [x] Revalidate the index against the evaluated application revision and update
   stale summaries without discarding historical results. All 70 User Story IDs,
   local source links, and heading anchors were checked.
-- [ ] At final acceptance, confirm remaining operational agreements are resolved
+- [x] At final acceptance, confirm remaining operational agreements are resolved
   and no mandatory work is untracked.
 - [x] Record applicable build, typecheck, test, formatting, and operational-check
   results for the accepted application revision, with environment, dates, responsible
@@ -325,7 +324,7 @@ does not substitute for executed installation work.
   correspondence and [Issue 18](issues/18-redesign-durable-recovery.md) for the later
   recovery redesign. These follow-ups may remain open at MVP closure; they do not
   defer existing Run durability or Issue 12's deployment/recovery checks.
-- [ ] Append a dated final acceptance and evidence summary to Issue 12 and this map,
+- [x] Append a dated final acceptance and evidence summary to Issue 12 and this map,
   then mark both closed. Preserve their delivered local evidence and reopening history.
 
 ## Out of Scope
@@ -352,7 +351,7 @@ does not substitute for executed installation work.
 ## Further Notes
 
 - Source of truth: [accepted foundations](../../docs/foundations.md), [canonical glossary](../../CONTEXT.md), and [accepted ADRs](../../docs/adr/). The foundations record agreement through Q46 on 2026-10-02. All ten ADRs are accepted; no conflicting architecture proposal is introduced here.
-- This is an umbrella MVP specification. Its `ready-for-agent` status is the tracker role; `State: open` records incomplete acceptance. The implementation resolutions above own completed design and historical local behavioral evidence. Issue 12 owns manual deployment acceptance. Issue 17 retains an open, suspended diagnostic for the unreproduced ownership report and is not a current blocker; Issues 16 and 18 are explicitly deferred. Any implementation that depends on a remaining unresolved choice must first complete that design.
+- This is an umbrella MVP specification. Its `ready-for-agent` status is the tracker role; `State: closed` records the accepted Docker MVP evaluation. The implementation resolutions above own completed design and historical local behavioral evidence. Issue 12 owns manual deployment acceptance. Issue 17 retains an open, suspended diagnostic for the unreproduced ownership report and is not a current blocker; Issues 16 and 18 are explicitly deferred. Any implementation that depends on a remaining unresolved choice must first complete that design.
 - The source's technical investigation was recorded on 2026-10-01. This synthesis does not refresh external documentation. The storage prototype selected LibSQL and validated the selected provider's pinned dependency set recorded in the linked storage-feasibility ticket.
 - Publication to the local issue tracker consists of this specification. No external issue system, additional architecture document, or combined implementation-ticket file is needed.
 
@@ -380,3 +379,19 @@ and five-minute evaluation recovery-time objective. Same-host recovery is the
 chosen evaluation scope; independent host-loss retrieval and off-host root-key
 custody remain prerequisites before real deployment. No production acceptance
 or thirty elapsed days of retained backups is claimed.
+
+### Docker evaluation accepted — 2026-10-08
+
+The User accepted two minutes for complete backup and five minutes for recovery,
+including the proposed unrestricted backup window while this PC is running. The
+scheduler now uses `FACTORY_BACKUP_MAX_TOTAL_MS=120000`; a complete backup under
+that setting succeeded in 6901 ms. The application remains at verified revision
+`29ee73c`; this acceptance changes Compose configuration and documentation only.
+The 196-pass full suite, separate Linux socket check, operational exercises, and
+70-story index remain the linked application evidence.
+
+Issue 12 and this map close for the selected same-host Docker evaluation. The
+[Docker evidence](evidence/docker-evaluation.md) records the executed checks and
+accepted limits. Independent host-loss recovery and off-host root-key custody
+remain prerequisites before real deployment. Issue 17 remains suspended without
+a claimed correction; Issues 16 and 18 remain explicitly deferred.

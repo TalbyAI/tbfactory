@@ -67,10 +67,11 @@ dispatch pause. Complete backup command duration includes drain and service retu
 Samples are in `.runtime/docker-backup-measurement.json`; the earlier bootstrap
 sample is `.runtime/docker-bootstrap-backup-measurement.json`.
 
-Operator agreement on the maximum backup window, permitted schedule window, and
-recovery-time objective remains pending. Codex proposed two minutes for the total
-backup window and five minutes for recovered service after these measurements;
-the proposal is not an accepted setting.
+On 2026-10-08, the operator accepted backups at any time while the PC is running,
+a two-minute maximum total backup window, and a five-minute recovery-time
+objective for this evaluation. The scheduler configures
+`FACTORY_BACKUP_MAX_TOTAL_MS=120000`; the recovery-time objective is an operator
+target and does not authorize automatic activation or replay.
 
 ## Delivered alert evidence
 
@@ -114,7 +115,7 @@ cause of that invocation's GitHub failure or diagnose Issue 17. Issue 17 remains
 open and suspended, with no ownership correction claimed.
 
 The executed checks below supplement the initial installation evidence.
-Operator agreement on limits remains required before evaluation acceptance.
+The operator accepted the measured evaluation limits on 2026-10-08.
 The dedicated same-host volumes do not demonstrate host-loss recovery,
 30 elapsed days of backup history, or real deployment acceptance.
 
@@ -166,7 +167,8 @@ A one-shot negative check used `FACTORY_BACKUP_MAX_TOTAL_MS=100`. SMTP4Dev accep
 the window alert at `1791388367255`, before the backup completed at
 `1791388374389`. The command succeeded after `7375 ms`; the alert did not cancel
 the operation or clear ownership. The threshold was confined to that test and
-remains unset in the regular Compose configuration pending operator agreement.
+was unset in regular operation during that check. On 2026-10-08 the operator
+accepted two minutes and the regular Compose setting became `120000` ms.
 
 Forcing only the web child to exit left the worker running. The public status
 reported `web: false`, the health helper returned failure, and SMTP4Dev accepted
@@ -268,14 +270,36 @@ and `git diff --check` passed. Their receipts are
 11 affected Markdown files and all 70 User Story IDs without a missing source
 or anchor. The final documentation commit changes no evaluated application code.
 
-### Acceptance still required
+### Operator acceptance — 2026-10-08
 
 The evaluation is running with persistent volumes and the scheduler daemon.
-The User remains the operator. Issue 12 and the parent specification stay open
-for agreement on the proposed two-minute total backup window, an unrestricted
-window while the PC is running, and the five-minute evaluation recovery-time
-objective. The regular backup-window threshold remains unset. Same-host volumes
+The User remains the operator and accepted the two-minute total backup window,
+an unrestricted window while the PC is running, and the five-minute evaluation
+recovery-time objective. Issue 12 and the parent specification close for the
+User-selected Docker evaluation. The regular backup-window threshold is `120000` ms.
+Same-host volumes
 and this small dataset do not establish host-loss recovery, thirty elapsed days
 of history, or production recovery estimates. Independent recovery access and
 off-host root-key custody remain prerequisites before real deployment. Issue 17
 remains suspended and undiagnosed; Issues 16 and 18 remain explicitly deferred.
+
+### Accepted configuration verification — 2026-10-08
+
+The scheduler container was recreated with `FACTORY_BACKUP_MAX_TOTAL_MS=120000`.
+Its environment was checked without printing secrets. The first attempted backup
+failed while Factory was unhealthy. The container had started on 2026-10-08,
+but retained the earlier worker owner and lock for PID `280`, host
+`tbfactory-evaluation`, and directory `/var/lib/factory-workflows`. No worker
+process was present and the recorded PID was independently verified absent.
+The existing `worker-recover-lock` operator command verified that identity and
+recovered the stopped owner; no ownership marker was deleted manually. Ordinary
+Factory restart then became healthy. This is runbook recovery, not a diagnosis
+or correction of historical Issue 17, and the preceding shutdown cause is unknown.
+
+A complete backup with the accepted limit succeeded in `6901 ms`, below
+`120000 ms`. The scheduler check returned `active: []` and `attempted: []`; its
+daemon resumed. Public OIDC retained `alpha` and `beta`. Evidence is
+`.runtime/docker-accepted-limits-owner-recovery.log`,
+`.runtime/docker-accepted-limits-backup.log`, and
+`.runtime/docker-accepted-limits-check.log`. Existing exceeded-window alert
+verification and the unchanged application's full-suite results remain valid.

@@ -166,6 +166,7 @@ services:
       FACTORY_SMTP_TO: operator@example.test
       FACTORY_SCHEDULE_BACKUP_INTERVAL_MS: "82800000"
       FACTORY_SCHEDULE_RETRY_INTERVAL_MS: "300000"
+      FACTORY_BACKUP_MAX_TOTAL_MS: "120000"
     volumes:
       - recovery-data:/var/lib/factory
     depends_on:
