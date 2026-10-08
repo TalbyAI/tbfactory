@@ -1,17 +1,16 @@
 import assert from 'node:assert/strict';
-import { spawn, execFileSync, type ChildProcess } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { writeFile, access } from 'node:fs/promises';
 import { join } from 'node:path';
 import { reviewRuntime } from './support/review-runtime';
 import { selfHostedProvider, BrowserClient } from './support/provider';
 import { provision } from '../src/server/provision';
 import { activities } from '../src/server/contracts';
+import { restartTestDatabase } from './support/database-restart';
 
 const r = await reviewRuntime();
 const provider = await selfHostedProvider();
 const origin = 'http://localhost:3000';
-const testDatabaseContainer =
-  process.env.FACTORY_TEST_DATABASE_CONTAINER ?? 'tbfactory-acceptance-db';
 await provision(r.f.store, {
   organization: { id: 'alpha', name: 'Alpha' },
   projects: [],
@@ -93,10 +92,7 @@ try {
   await r.wait(path, 'waiting-inputs');
   await r.stopWorker();
   await stopWeb();
-  execFileSync('docker', ['restart', testDatabaseContainer], {
-    windowsHide: true,
-    stdio: 'pipe',
-  });
+  await restartTestDatabase(r.f.config.url);
   await startWeb();
   await r.startWorker();
   const intake = await browser.json(origin, `${path}/reviews`);
@@ -139,10 +135,7 @@ try {
   const count = r.requests.length;
   await r.stopWorker();
   await stopWeb();
-  execFileSync('docker', ['restart', testDatabaseContainer], {
-    windowsHide: true,
-    stdio: 'pipe',
-  });
+  await restartTestDatabase(r.f.config.url);
   await startWeb();
   await r.startWorker();
   const recovered = await browser.json(origin, `${path}/reviews`);
@@ -178,10 +171,7 @@ try {
   const decision = await browser.json(origin, `${path}/review-decisions`, decisionInput);
   assert.equal(decision.status, 200);
   await stopWeb();
-  execFileSync('docker', ['restart', testDatabaseContainer], {
-    windowsHide: true,
-    stdio: 'pipe',
-  });
+  await restartTestDatabase(r.f.config.url);
   await startWeb();
   const persisted = await browser.json(origin, `${path}/reviews`);
   assert.equal(

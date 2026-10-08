@@ -1,0 +1,201 @@
+name: tbfactory-mvp-docker
+
+x-factory-image: &factory-image
+  image: tbfactory-mvp-docker:local
+  build:
+    context: ../..
+    dockerfile: docker/evaluation/Dockerfile
+
+services:
+  database-volume-bootstrap:
+    <<: *factory-image
+    entrypoint: ["node"]
+    command: ["docker/evaluation/scripts/initialize-database-volume.mjs"]
+    user: "0:0"
+    read_only: true
+    tmpfs:
+      - /tmp
+    volumes:
+      - surrealdb-data:/data
+    restart: "no"
+
+  database:
+    image: surrealdb/surrealdb:v3.3.0@sha256:681c6c22c287421b5c7d99e0fde79b6e0d32c36c1ddeaab2762a1661cb04cd20
+    user: nonroot
+    command:
+      - start
+      - --log
+      - info
+      - --bind
+      - 0.0.0.0:8000
+      - --user
+      - root
+      - --pass
+      - acceptance-only
+      - rocksdb:/data/factory.db
+    volumes:
+      - surrealdb-data:/data
+    depends_on:
+      database-volume-bootstrap:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "/surreal", "is-ready", "--endpoint", "http://127.0.0.1:8000"]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+      start_period: 10s
+
+  root-key-bootstrap:
+    <<: *factory-image
+    entrypoint: ["node"]
+    command: ["docker/evaluation/scripts/initialize-root-key.mjs"]
+    user: node
+    read_only: true
+    tmpfs:
+      - /tmp
+    volumes:
+      - root-key:/run/factory-root
+    restart: "no"
+
+  factory:
+    <<: *factory-image
+    hostname: tbfactory-evaluation
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 12m
+    group_add:
+      - "0"
+    environment:
+      DOCKER_HOST: unix:///var/run/docker.sock
+      FACTORY_INSTALLATION: tbfactory-evaluation
+      FACTORY_ORIGIN: http://127.0.0.1:18030
+      FACTORY_BIND_HOST: 0.0.0.0
+      FACTORY_PORT: "18030"
+      FACTORY_DATABASE_URL: ws://database:8000/rpc
+      FACTORY_DATABASE_NAMESPACE: factory_evaluation
+      FACTORY_DATABASE_NAME: factory
+      FACTORY_DATABASE_USER: root
+      FACTORY_DATABASE_PASSWORD: acceptance-only
+      FACTORY_OIDC_ISSUER: http://127.0.0.1:18081
+      FACTORY_OIDC_CLIENT_ID: factory
+      FACTORY_OIDC_CLIENT_SECRET: fixture-secret
+      FACTORY_OIDC_AUTH_METHOD: client_secret_post
+      FACTORY_ALLOW_LOOPBACK_HTTP: "true"
+      FACTORY_TRUST_VERIFIED_EMAIL: "true"
+      FACTORY_ROOT_KEY_VERSION: root-1
+      FACTORY_ROOT_KEY_FILE: /run/factory-root/factory-root.key
+      FACTORY_RING_DIRECTORY: /var/lib/factory-key-ring
+      FACTORY_RING_BACKUP_DIRECTORY: /var/lib/factory-ring-backups
+      FACTORY_RECOVERY_DIRECTORY: /var/lib/factory/recovery
+      FACTORY_WORKER_DIRECTORY: /var/lib/factory-workflows
+      FACTORY_ARTIFACT_DIRECTORY: /var/lib/factory-artifacts
+      FACTORY_MAINTENANCE: "false"
+      FACTORY_APPROVED_ENDPOINT_HOSTS: openrouter.ai,api.openai.com,api.anthropic.com,github.com,api.github.com,dev.azure.com,host.docker.internal
+      FACTORY_WORKER_LIMITS: '{"calls":40,"aiMs":600000,"executionMs":1200000,"subordinateAgents":4}'
+      FACTORY_STOP_TIMEOUT_MS: "120000"
+    ports:
+      - "127.0.0.1:18030:18030"
+      - "127.0.0.1:18081:18081"
+    volumes:
+      - worker-data:/var/lib/factory-workflows
+      - artifact-data:/var/lib/factory-artifacts
+      - key-ring:/var/lib/factory-key-ring
+      - key-ring-backups:/var/lib/factory-ring-backups
+      - recovery-data:/var/lib/factory
+      - root-key:/run/factory-root:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      database:
+        condition: service_healthy
+      root-key-bootstrap:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "node", "docker/evaluation/scripts/factory-health.mjs"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 15s
+
+  oidc:
+    <<: *factory-image
+    entrypoint: ["node"]
+    command: ["--import", "tsx", "docker/evaluation/scripts/oidc.ts"]
+    expose:
+      - "18081"
+    depends_on:
+      factory:
+        condition: service_started
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+
+  smtp4dev:
+    image: rnwood/smtp4dev:v3@sha256:25c434c1900a9c5b61e17ead0a774d9e81b80554d05cf64719d69e5ea8c66537
+    environment:
+      ServerOptions__Urls: http://*:80
+    ports:
+      - "127.0.0.1:18085:80"
+    volumes:
+      - smtp4dev-data:/smtp4dev
+    restart: unless-stopped
+
+  review-boundary:
+    <<: *factory-image
+    entrypoint: ["node"]
+    command: ["--import", "tsx", "docker/evaluation/review-boundary.ts"]
+    environment:
+      FACTORY_EVALUATION_DATA: /var/lib/tbfactory-evaluation
+    ports:
+      - "127.0.0.1:18082:18082"
+    volumes:
+      - review-boundary-data:/var/lib/tbfactory-evaluation
+    restart: unless-stopped
+
+  scheduler:
+    <<: *factory-image
+    entrypoint: ["node"]
+    command: ["--import", "tsx", "scripts/installation-schedule.ts", "run"]
+    environment:
+      FACTORY_INSTALLATION: tbfactory-evaluation
+      FACTORY_RECOVERY_DIRECTORY: /var/lib/factory/recovery
+      FACTORY_SMTP_HOST: smtp4dev
+      FACTORY_SMTP_PORT: "25"
+      FACTORY_SMTP_FROM: factory@example.test
+      FACTORY_SMTP_TO: operator@example.test
+      FACTORY_SCHEDULE_BACKUP_INTERVAL_MS: "82800000"
+      FACTORY_SCHEDULE_RETRY_INTERVAL_MS: "300000"
+      FACTORY_BACKUP_MAX_TOTAL_MS: "120000"
+    volumes:
+      - recovery-data:/var/lib/factory
+    depends_on:
+      factory:
+        condition: service_healthy
+      smtp4dev:
+        condition: service_started
+    restart: unless-stopped
+    stop_grace_period: 11m
+    read_only: true
+    tmpfs:
+      - /tmp
+
+volumes:
+  surrealdb-data:
+    name: tbfactory-mvp-docker-surrealdb
+  worker-data:
+    name: tbfactory-mvp-docker-worker
+  artifact-data:
+    name: tbfactory-mvp-docker-artifacts
+  key-ring:
+    name: tbfactory-mvp-docker-key-ring
+  key-ring-backups:
+    name: tbfactory-mvp-docker-key-ring-backups
+  recovery-data:
+    name: tbfactory-mvp-docker-recovery
+  root-key:
+    name: tbfactory-mvp-docker-root-key
+  smtp4dev-data:
+    name: tbfactory-mvp-docker-smtp4dev
+  review-boundary-data:
+    name: tbfactory-mvp-docker-review-boundary

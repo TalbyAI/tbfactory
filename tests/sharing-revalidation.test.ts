@@ -4,11 +4,11 @@ import { publicationRuntime } from './support/publication-runtime';
 import { putPublicationConfiguration } from '../src/server/publication-provider';
 import { provision } from '../src/server/provision';
 import { revokeMembership, setPolicy } from '../src/server/operator';
-import { execFileSync } from 'node:child_process';
 import { connectStore } from '../src/server/store';
 import { Factory } from '../src/server/factory';
 import { Authentication } from '../src/server/auth';
 import { handleHttp } from '../src/server/http';
+import { restartTestDatabase } from './support/database-restart';
 
 test('Sharing durations are bounded and calculated from server time', async () => {
   const f = await publicationRuntime('github', false, true);
@@ -162,10 +162,7 @@ test('Selected expiry survives web and database restart on the same persistent v
       })
     ).body.share;
     assert.equal((await f.r.download(new URL(share.url).pathname)).status, 200);
-    execFileSync('docker', ['restart', 'tbfactory-acceptance-db'], {
-      windowsHide: true,
-      stdio: 'pipe',
-    });
+    await restartTestDatabase(f.r.f.config.url);
     restarted = await connectStore(f.r.f.config);
     const services = {
       factory: new Factory(restarted, undefined, f.r.f.factory.sharing),

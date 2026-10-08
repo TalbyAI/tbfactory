@@ -1,8 +1,8 @@
 # Diagnose worker ownership during crash recovery
 
-Status: ready-for-agent
+Status: needs-info
 Type: AFK
-Labels: wayfinder:task
+Labels: wayfinder:task, suspended
 State: open
 
 ## Parent
@@ -30,7 +30,14 @@ the ownership guard. The cause remains unknown. Historical local logs are
 investigation inputs, not durable tracker evidence. See the
 [installation delivery evidence](../evidence/persistent-shared-installation.md#final-package-verification).
 
-## Investigation and acceptance criteria
+## Original investigation and acceptance criteria
+
+The criteria below were written before the User-directed suspension on 2026-10-07.
+They remain open diagnostic work, but causal reproduction and correction are
+suspended pending reproducible reporting conditions. This issue no longer blocks
+Issue 12 or MVP closure. No cause or correction is claimed. Preserve all ownership
+and confirmed-stop protections; Issue 12's deployment-specific restart and recovery
+checks remain required.
 
 - [ ] Preserve a nonsecret summary of the failed scenario, tested revision,
   environment, and error in committed evidence; retain the distinction between
@@ -52,10 +59,10 @@ investigation inputs, not durable tracker evidence. See the
   on the corrected revision, plus build, typecheck, and formatting checks. Record
   results and any remaining limits in the resolution.
 
-If causal diagnosis remains incomplete, keep this issue open and recovery acceptance
-pending. Do not remove ownership protection or introduce blind retries to obtain a
-passing test. [Issue 12](12-persistent-shared-installation.md) and MVP closure depend
-on this resolution; resolving this issue does not itself complete deployment checks.
+Do not remove ownership protection or introduce blind retries to obtain a passing
+test. The original causal diagnosis dependency was superseded by the User-directed
+suspension above. Resolving this issue later does not itself complete Issue 12's
+deployment checks.
 
 ## Comments
 
@@ -64,3 +71,14 @@ on this resolution; resolving this issue does not itself complete deployment che
 The User agreed to an open diagnostic issue and to keeping acceptance of the failed
 recovery scenario pending. Passing isolated repetitions and a later complete suite
 are historical evidence, not a demonstrated correction of the original failure.
+
+### User-directed suspension — 2026-10-07
+
+The User directed suspension because the reported worker-ownership startup failure
+cannot be reproduced under the recorded follow-up runs. Set the tracker status to
+`needs-info`, retain `State: open`, and add the `suspended` label. Reproduction
+conditions sufficient to distinguish product behavior from test lifecycle are still
+needed. The original cause remains unknown; no product or test-harness correction is
+claimed. Preserve the ownership guard and confirmed-stop requirements. This open,
+suspended diagnostic is not a current blocker for Issue 12 or MVP closure; Issue 12's
+deployment-specific restart, recovery, and ownership checks remain mandatory.

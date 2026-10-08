@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
-import { spawn, execFileSync, type ChildProcess } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { publicationRuntime } from './support/publication-runtime';
 import { selfHostedProvider, BrowserClient } from './support/provider';
 import { provision, userId } from '../src/server/provision';
 import { activities } from '../src/server/contracts';
+import { restartTestDatabase } from './support/database-restart';
 
 const empty = process.argv.includes('--empty');
 const f = await publicationRuntime('github', empty, true);
@@ -155,10 +156,7 @@ try {
     assert.ok(!f.posts[0].body.body.includes(f.report.findings[0].title));
     await stopWeb();
     await f.r.stopWorker();
-    execFileSync('docker', ['restart', 'tbfactory-acceptance-db'], {
-      windowsHide: true,
-      stdio: 'pipe',
-    });
+    await restartTestDatabase(f.r.f.config.url);
     await startWeb();
     await f.r.startWorker();
     assert.equal(await (await recipient.request(share.url)).text(), content);

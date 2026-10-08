@@ -314,6 +314,7 @@ test('built coordinator captures, restores, and drills a real suspended review',
 
     const status = JSON.parse(await cliText(env, 'status'));
     assert.equal(status.backup.state, 'succeeded');
+    assert.equal(status.backup.lastSuccessful.recoveryPointAt, manifest.recoveryPointAt);
     assert.equal(status.worker, true);
     assert.equal(status.web, true);
     sourceAiCalls = runtime.r.requests.length;
@@ -697,7 +698,12 @@ test('built coordinator captures, restores, and drills a real suspended review',
     );
     const timedOutStatus = JSON.parse(await cliText(env, 'status'));
     assert.equal(timedOutStatus.backup.state, 'failed');
-    assert.equal(timedOutStatus.backup.overdue, true);
+    assert.equal(timedOutStatus.backup.overdue, false);
+    assert.equal(
+      timedOutStatus.backup.lastSuccessful.recoveryPointAt,
+      activatedManifest.recoveryPointAt,
+      'a failed attempt retains the prior successful recovery point',
+    );
     assert.equal(timedOutStatus.backup.bundle, undefined);
     assert.equal(timedOutStatus.worker, true);
     assert.equal(timedOutStatus.web, true);

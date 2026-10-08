@@ -344,6 +344,8 @@ export async function createBundle(options: {
   const completed = join(recoveryDirectory, `recovery-${capturedAt}-${id}`);
   await mkdir(stage, { recursive: false, mode: 0o700 });
   try {
+    for (const component of ['worker', 'artifacts'])
+      await mkdir(join(stage, component), { recursive: false, mode: 0o700 });
     const databaseFile = join(stage, 'factory', 'export.surql');
     await mkdir(dirname(databaseFile), { recursive: true, mode: 0o700 });
     await writeFile(databaseFile, surreal, { flag: 'wx', mode: 0o600 });

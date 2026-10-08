@@ -144,10 +144,12 @@ existing host/path-bound recovery procedure.
 ## Explicitly pending deployment decisions
 
 Issue 12 and the umbrella specification remain open until their manual work and
-verification have actually been performed. The ownership startup failure also
-remains an acceptance blocker in
-[Issue 17](../issues/17-diagnose-worker-ownership-recovery.md); successful later
-test invocations did not establish its cause or correction.
+verification have actually been performed. [Issue 17](../issues/17-diagnose-worker-ownership-recovery.md)
+retains the historical ownership startup report as an open, suspended diagnostic
+with `Status: needs-info` because its reporting conditions cannot currently be
+reproduced. Its cause remains unknown; no correction is claimed, and it is not a
+current acceptance blocker. Keep ownership protections and perform Issue 12's
+deployment-specific restart and recovery checks.
 
 The local acceptance path does not choose or prove a production off-host recovery
 destination, its access policy, a measured installation-specific recovery-time

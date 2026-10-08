@@ -90,12 +90,14 @@ in the GitHub crash-recovery test. That case passed three isolated repetitions
 and the final full invocation. Its original cause was not established; no
 ownership protection was weakened or speculative fix introduced.
 
-[Issue 17](../issues/17-diagnose-worker-ownership-recovery.md) now tracks causal
-diagnosis and correction. Recovery acceptance remains pending despite the later
-passing invocation. Temporary backup interruption is accepted for the MVP, but
-its measured maximum must be agreed in the chosen environment before Issue 12
-closes. The restored-observation omission is an accepted MVP limitation; the
-broader recovery redesign is deferred in
+[Issue 17](../issues/17-diagnose-worker-ownership-recovery.md) records the original
+report as open and suspended with `Status: needs-info`: its conditions could not
+be reproduced in the later recorded runs. The cause remains unknown and no
+correction is claimed. This diagnostic is not a current blocker; preserve the
+ownership guards and perform Issue 12's deployment-specific restart and recovery
+checks. Temporary backup interruption is accepted for the MVP, but its measured
+maximum must be agreed in the chosen environment before Issue 12 closes. The
+restored-observation omission is an accepted MVP limitation; the broader recovery redesign is deferred in
 [Issue 18](../issues/18-redesign-durable-recovery.md), preserving current Run
 durability and conservative interrupted-execution recovery requirements.
 

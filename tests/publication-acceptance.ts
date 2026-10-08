@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { publicationRuntime } from './support/publication-runtime';
@@ -7,6 +7,7 @@ import { selfHostedProvider, BrowserClient } from './support/provider';
 import { provision } from '../src/server/provision';
 import { activities } from '../src/server/contracts';
 import { setPolicy } from '../src/server/operator';
+import { restartTestDatabase } from './support/database-restart';
 
 const f = await publicationRuntime('github');
 const provider = await selfHostedProvider();
@@ -296,10 +297,7 @@ try {
   assert.ok(evidence);
   await stopWeb();
   await f.r.stopWorker();
-  execFileSync('docker', ['restart', 'tbfactory-acceptance-db'], {
-    windowsHide: true,
-    stdio: 'pipe',
-  });
+  await restartTestDatabase(f.r.f.config.url);
   await startWeb();
   await f.r.startWorker();
   const restored = await browser.json(origin, `${f.path}/reviews`);

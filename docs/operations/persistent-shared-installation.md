@@ -1,17 +1,22 @@
 # Persistent shared installation operations
 
-This runbook describes the local native Node installation delivered for Issue 12.
-It runs the built TanStack Start web server and one Mastra worker as separate Node
-processes. Docker runs SurrealDB and review sandbox containers. The local recovery
-directory exercises backup and restore on one host; production still requires an
-independent protected recovery destination and a measured installation-specific
-recovery-time objective.
+The User selected Docker on the current Windows PC for the MVP evaluation on
+2026-10-07 and is its operator. The [Docker evaluation runbook](../../docker/evaluation/README.md)
+provides the runnable Compose installation, loopback application and mock inbox
+addresses, persistent volumes, and container commands. The Factory container runs
+the built TanStack Start web server and one Mastra worker as separate processes;
+SurrealDB, controlled OIDC/provider/AI boundaries, SMTP4Dev, and the operational
+scheduler run in their own containers. LibSQL remains the worker's embedded
+Workflow storage inside its persistent volume.
 
-Native Node is a provisional choice for local verification, confirmed as such by
-the User on 2026-10-07. Choose the deployment shape explicitly before operational
-acceptance. [Issue 12](../../.scratch/factory-mvp/issues/12-persistent-shared-installation.md#manual-work-and-closure-evidence)
-is reopened and records the manual work and evidence required for closure; this
-runbook and prior local checks do not establish that those jobs are deployed.
+The dedicated Docker recovery volume and separately mounted root-key volume
+exercise backup and restore on this host. Independent recovery after losing the
+PC remains required before real deployment. The native Node commands below retain
+the underlying operational contract and historical local procedure.
+[Issue 12](../../.scratch/factory-mvp/issues/12-persistent-shared-installation.md#manual-work-and-closure-evidence)
+records the selected environment, executed acceptance evidence, and remaining
+operator decisions. Prior local checks and a runnable command do not establish
+that a job was deployed or accepted.
 
 ## Configure and start
 
@@ -70,11 +75,16 @@ closes. `FACTORY_BACKUP_TIMEOUT_MS` defaults to five minutes per phase; it does
 not cap total interruption. Verify service return, and configure alerting and
 operator action for an exceeded limit or failed shutdown/restart.
 
-Run a backup at least once every 24 hours. Configure the host scheduler to invoke
-the public command below daily and to alert on a nonzero exit code. `status`
-reports `overdue` after 24 hours without a completed recovery point; monitor this
-value alongside SurrealDB and process health. A healthy web/worker process does
-not prove a recent recovery point.
+Configure the host scheduler to invoke the public command below at least daily
+and to alert on a nonzero exit code. The Docker evaluation uses a 23-hour regular
+backup interval and retries failed or stale-running jobs every five minutes by
+default; `FACTORY_SCHEDULE_RETRY_INTERVAL_MS` can configure the retry interval.
+`status` reports `overdue` when the most recent successful `recoveryPointAt` is
+more than 24 hours old. A failed or running attempt does not reset that age. The
+schedule cannot guarantee a 24-hour recovery point while the PC or scheduler is
+offline or backups keep failing, so operators must respond before the last
+recovery point crosses 24 hours. A healthy web/worker process does not prove a
+recent recovery point.
 
 ```powershell
 npm run installation -- backup
@@ -123,7 +133,9 @@ coverage, and verifies secret decryption without printing plaintext. It does not
 generate replacement keys over restored data. Successful restore writes a
 durable hold ledger into the new worker directory. The web stays in maintenance
 and `scripts/worker.ts` refuses to connect or claim ownership while the ledger
-has not been activated, even if an operator starts the worker directly.
+has not been activated, even if an operator starts the worker directly. The
+maintenance web process remains live; only the worker's absence is expected. A
+missing web process remains a service-health incident during restore hold.
 
 Before activation, inspect Workflow Run and cancellation ownership, AI call
 reservations, publication attempts, retained Artifact access, and provider
@@ -154,10 +166,23 @@ and completed results; interrupted execution follows the
 [conservative manual-recovery procedure](durable-private-reviews.md#consumption-and-recovery)
 without automatically replaying uncertain AI/provider effects.
 
-The unresolved ownership startup failure is tracked separately in
-[Issue 17](../../.scratch/factory-mvp/issues/17-diagnose-worker-ownership-recovery.md)
-and blocks acceptance of the affected recovery scenario. Do not treat later
-passing repetitions as a diagnosed correction or bypass a live ownership guard.
+The original worker-ownership startup report remains unexplained. Per the
+User-directed update in
+[Issue 17](../../.scratch/factory-mvp/issues/17-diagnose-worker-ownership-recovery.md),
+the diagnostic is open and suspended with `Status: needs-info` because the
+reporting conditions cannot currently be reproduced; no correction is claimed.
+Keep live-owner and confirmed-stop protections. This status does not replace the
+deployment-specific restart and recovery checks required by
+[Issue 12](../../.scratch/factory-mvp/issues/12-persistent-shared-installation.md).
+
+If graceful shutdown fails after a child process exits, check `status` and
+confirm both children are absent, no database `worker_owner` remains, and
+`worker.lock` is absent before force-stopping the coordinator. Do not remove or
+rewrite ownership markers. If ownership is still present, leave the coordinator
+available and follow the worker recovery procedure. On Linux, the next startup
+probes an existing Unix control socket and refuses an active listener; it only
+removes the same socket after repeated connection probes confirm it is stale.
+Control-socket recovery does not change worker ownership.
 
 ```powershell
 npm run installation -- recovery-list

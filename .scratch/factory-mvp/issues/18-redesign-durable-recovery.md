@@ -35,8 +35,13 @@ These commitments remain governed by
 [ADR 0004](../../../docs/adr/0004-serialized-durable-workflow-runs.md),
 [ADR 0007](../../../docs/adr/0007-platform-owned-versioned-definitions.md), and the
 [existing recovery procedure](../../../docs/operations/durable-private-reviews.md#consumption-and-recovery).
-The unresolved ownership failure remains a separate MVP blocker in
-[Issue 17](17-diagnose-worker-ownership-recovery.md).
+The historical ownership startup report is tracked separately in
+[Issue 17](17-diagnose-worker-ownership-recovery.md), which is open and suspended
+with `Status: needs-info` because its reporting conditions cannot currently be
+reproduced. Its cause remains unknown and no correction is claimed. It is not a
+current MVP blocker. Preserve ownership protections and complete Issue 12's
+deployment-specific restart and recovery checks; this deferred redesign does not
+replace or postpone them.
 
 ## Questions for the later design
 

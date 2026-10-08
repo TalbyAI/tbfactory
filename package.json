@@ -32,6 +32,7 @@
     "@mastra/libsql": "1.25.0",
     "@tanstack/react-router": "1.170.41",
     "@tanstack/react-start": "1.168.60",
+    "nodemailer": "10.0.9",
     "openid-client": "6.8.8",
     "react": "19.2.4",
     "react-dom": "19.2.4",

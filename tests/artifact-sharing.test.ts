@@ -6,9 +6,9 @@ import { putPublicationConfiguration } from '../src/server/publication-provider'
 import { setPolicy, revokeMembership } from '../src/server/operator';
 import { provision } from '../src/server/provision';
 import { handleHttp } from '../src/server/http';
-import { execFileSync } from 'node:child_process';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { restartTestDatabase } from './support/database-restart';
 
 for (const provider of ['github', 'azure-devops'] as const) {
   test(`${provider}: revocation committed during provider verification blocks POST and preserves recovery`, async () => {
@@ -76,10 +76,7 @@ for (const provider of ['github', 'azure-devops'] as const) {
         operationId: 'revoke-uncertain',
       });
       await f.r.stopWorker();
-      execFileSync('docker', ['restart', 'tbfactory-acceptance-db'], {
-        windowsHide: true,
-        stdio: 'pipe',
-      });
+      await restartTestDatabase(f.r.f.config.url);
       await f.r.startWorker();
       const listing = (await f.r.f.request(`${f.path}/artifact-shares`)).body.shares;
       const restored = listing.find((s: any) => s.id === share.id);

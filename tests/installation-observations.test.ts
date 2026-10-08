@@ -1,4 +1,3 @@
-import { execFileSync } from 'node:child_process';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { handleHttp } from '../src/server/http.ts';
@@ -7,9 +6,8 @@ import { serviceUser } from '../src/server/review-configuration.ts';
 import { setPolicy } from '../src/server/operator.ts';
 import { reviewRuntime } from './support/review-runtime.ts';
 import { delivery, observation, sourceInput } from './support/observations.ts';
+import { restartTestDatabase } from './support/database-restart.ts';
 
-const installationDatabase =
-  process.env.FACTORY_TEST_DATABASE_CONTAINER ?? 'tbfactory-acceptance-db';
 const delay = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
 async function eventually<T>(
@@ -48,38 +46,7 @@ async function receive(r: Awaited<ReturnType<typeof reviewRuntime>>, request: Re
 }
 
 async function restartOwnedDatabase(r: Awaited<ReturnType<typeof reviewRuntime>>) {
-  const databaseUrl = new URL(r.f.config.url);
-  const portMappings = JSON.parse(
-    execFileSync(
-      'docker',
-      ['inspect', '--format', '{{json .NetworkSettings.Ports}}', installationDatabase],
-      { encoding: 'utf8', windowsHide: true },
-    ),
-  )['8000/tcp'] as { HostIp: string; HostPort: string }[] | undefined;
-  assert.ok(
-    portMappings?.some(
-      (mapping) =>
-        Number(mapping.HostPort) === Number(databaseUrl.port) &&
-        (mapping.HostIp === databaseUrl.hostname ||
-          mapping.HostIp === '0.0.0.0' ||
-          mapping.HostIp === '::'),
-    ),
-    `${installationDatabase} does not map SurrealDB to ${databaseUrl.origin}`,
-  );
-  const inspected = execFileSync(
-    'docker',
-    ['inspect', '--format', '{{.Name}}', installationDatabase],
-    {
-      encoding: 'utf8',
-      windowsHide: true,
-    },
-  ).trim();
-  assert.equal(inspected, `/${installationDatabase}`);
-  execFileSync('docker', ['restart', installationDatabase], {
-    encoding: 'utf8',
-    windowsHide: true,
-    stdio: 'pipe',
-  });
+  await restartTestDatabase(r.f.config.url);
   await eventually(
     'persistent Factory database',
     () => r.f.request('/api/organizations/alpha/work-items'),
