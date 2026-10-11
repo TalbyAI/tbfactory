@@ -36,6 +36,17 @@ the actual authorization-code/PKCE login. The existing application supports
 selected Microsoft configuration. See
 [Microsoft OIDC](https://learn.microsoft.com/en-us/entra/identity-platform/v2-protocols-oidc).
 
+For a native local development walkthrough, the User selected
+`http://localhost:3001/auth/callback` on 2026-10-11, without Caddy. Microsoft accepted
+this Web redirect URI. Set `FACTORY_ORIGIN=http://localhost:3001`,
+`FACTORY_PORT=3001` and explicitly enable `FACTORY_ALLOW_LOOPBACK_HTTP=true` in the
+isolated installation. The Microsoft issuer remains HTTPS. The application checks
+issuer and callback transport separately, permitting HTTP only on loopback with
+that opt-in. Keep the existing Secure, HttpOnly cookies and prove their behavior
+through the actual browser login; registration and a login redirect alone do not
+prove a completed session. This development exception does not replace the public
+HTTPS endpoint required for Azure DevOps service hooks or production HTTPS.
+
 Use a separate real-provider installation with independent database, installation
 identity, root key, key ring, Workflow and Artifact paths. Follow
 [installation](persistent-shared-installation.md) and

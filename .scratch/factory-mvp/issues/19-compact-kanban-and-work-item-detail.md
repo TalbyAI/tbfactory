@@ -1,7 +1,7 @@
 # Improve the work interface with compact Kanban cards and Work Item detail
 
 Status: ready-for-human
-State: open
+State: closed
 Type: AFK
 Assignee: Codex
 
@@ -34,7 +34,7 @@ ticket and the real Azure DevOps walkthrough in Issue 20.
 - [x] Review, transitions, Approval, cancellation, migration, publication,
   finalization, notes, corrections and references remain available in detail.
 - [x] Administration and creation no longer compete with the Board on the home view.
-- [ ] Verify empty, loading, error, desktop, small-laptop and narrow-screen states,
+- [x] Verify empty, loading, error, desktop, small-laptop and narrow-screen states,
   plus keyboard focus and retained Organization isolation.
 - [x] Record focused tests, build, typecheck, formatting, and browser evidence.
 
@@ -68,3 +68,19 @@ background T3 preview does not paint focus while its document is inactive.
 Keep this ticket open for foreground keyboard-focus and User visual acceptance;
 this is the remaining part of the unchecked interface criterion, not unfinished
 implementation. The existing Docker installation has not been redeployed.
+
+### Foreground focus and User visual acceptance — 2026-10-11
+
+During the isolated real-provider walkthrough, after the actual Microsoft login
+and explicit Membership provisioning, the User reported that authorization,
+navigation, access and focus all looked correct. The User deliberately did not
+activate action buttons, preserving the practical test's initial state. This
+completes the outstanding foreground focus and User visual acceptance identified
+above. It does not claim new Review, publication, finalization or other form
+submissions; those remain covered by the dated implementation/fixture evidence
+and, for real-provider execution, the open Issue 20.
+
+The other interface acceptance criteria retain their executed 2026-10-08 evidence.
+Issue 19 closes with that evidence and this explicit User visual acceptance.
+Issue 20 and the reopened MVP remain open; the existing Docker evaluation and
+all historical comments are retained.

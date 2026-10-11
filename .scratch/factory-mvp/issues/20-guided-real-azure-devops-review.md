@@ -35,7 +35,7 @@ troubleshooting and a guided session in Spanish when requested:
 - [ ] Record nonsecret Repository/PR, tenant, installation, model and budget choices.
 - [ ] Keep real credentials outside Git, chat, screenshots and logs; preserve the
   existing Organization-owned encrypted credential boundaries.
-- [ ] Validate Microsoft OIDC compatibility and Membership without identity merging.
+- [x] Validate Microsoft OIDC compatibility and Membership without identity merging.
 - [ ] Confirm actual service-hook delivery and real, isolated repository checkout.
 - [ ] Confirm a real model report and complete human Review Decision.
 - [ ] Record the explicitly chosen publication outcome and separate finalization.
@@ -220,3 +220,185 @@ origin and exact `/auth/callback` URL before updating the existing app. Create
 and retain any client secret only through a protected local workflow, outside
 Git, chat and captured output. Factory login and exact issuer/subject,
 Membership, UI acceptance, Repository import and paid execution remain pending.
+
+### Isolated installation and HTTP localhost experiment — 2026-10-11
+
+The User authorized preparation, then explicitly requested a practical HTTP
+localhost callback experiment without Caddy. The final browser origin is
+`http://localhost:3001`; Web callback is
+`http://localhost:3001/auth/callback`. Azure CLI updated the existing `TBFactory`
+App registration and read back this exact URI successfully. The tenant-specific
+Microsoft issuer remains HTTPS with `client_secret_post`.
+
+Installation isolation and protected custody:
+
+- Installation identity `tbfactory-real-1905`, native web/worker using the current
+  production build from this working tree. Runtime data is under
+  `C:/Users/iskan/AppData/Local/TBFactory/real-review-1905`, with separate `worker`,
+  `artifacts`, `ring`, `ring-backups`, `recovery` and `logs` directories.
+- Protected environment and independently generated 32-byte root key are under
+  `C:/protected/tbfactory-real-1905`. Both installation directories have inheritance
+  disabled and access granted only to the current Windows User and SYSTEM.
+  These are same-host exercise paths, not production disaster-recovery custody.
+- SurrealDB uses a separate `tbfactory-real-1905-database` container and
+  `tbfactory-real-1905-surrealdb` volume, pinned image digest
+  `sha256:681c6c22c287421b5c7d99e0fde79b6e0d32c36c1ddeaab2762a1661cb04cd20`,
+  and loopback port `18002`. Namespace `factory_real_1905`, database `factory`.
+  Its independent generated bootstrap password is supplied through a protected
+  environment file, never plaintext command arguments. Docker administrators
+  remain privileged installation operators and can inspect container environment.
+- `ring-setup` and `secret-check` succeeded with generation 1 and zero stored
+  Organization secrets. The existing sandbox image was resolved to its immutable
+  digest for this installation. No evaluation volume or worker directory is reused.
+- A new app credential was added with `az ad app credential reset --append`,
+  description `TBFactory real PR 1905 20261011-102245`, expiry
+  `2026-11-10T10:22:45Z`. Its response was captured in memory and written directly
+  to the protected installation environment; no secret was displayed or retained
+  in this ticket. No previous credential was invalidated.
+- The web/worker runner is launched from this repository with
+  `node --env-file=C:/protected/tbfactory-real-1905/factory-real.env --import tsx scripts/installation.ts run`.
+  It is supervised by the active tool session, not installed as a Windows startup
+  service. Keep the same working directory and protected environment for operator
+  commands. Before any restart, use `installation.ts status`; do not start a second
+  worker. Initial backup and restore drill have not been executed.
+
+Failures and retained evidence:
+
+- The initial database start failed with RocksDB `PermissionDenied`. After the
+  initializer reported success, the empty volume was observed as root-owned mode
+  0755. Docker volume copy-up was the suspected reset boundary. Logs were captured
+  in protected `logs/database-permission-failure.log` before retry. The failed new
+  container was stopped and removed, retaining its empty volume. Reinitialization
+  verified UID/GID 65532 and mode 0700, then the replacement used `volume-nocopy`.
+  `/ready` subsequently returned 200 and key-ring commands succeeded.
+- A combined PowerShell setup/hidden-launch command was rejected by tool policy
+  before execution. The operator ran the existing CLI commands separately and
+  used tool-managed foreground process sessions instead; no approval bypass or
+  permission request was used.
+- The first HTTPS self-check expected 200 at `/`, but the application normally
+  redirects to `/?view=board`. This test expectation was corrected; the original
+  observation is in protected `logs/initial-https-smoke-check.txt`.
+- HTTPS through Caddy then failed login with `400 Invalid application origin`.
+  The installed Nitro/srvx server does not trust forwarded protocol by default,
+  so its HTTP upstream request has an HTTP origin. Evidence is in protected
+  `logs/https-proxy-origin-failure.txt`. No proxy-trust code change was made.
+- At the User's instruction, the installation stopped gracefully before changing
+  origin. Only the Caddy process on port 3443 was stopped. Its exact temporary CA
+  was removed from `CurrentUser/Root` using `certutil -user -delstore` after the
+  certificate-provider removal failed because UI was unavailable. That initial
+  failure is preserved in `logs/certificate-removal-first-attempt.txt`. Dormant
+  protected Caddy configuration/CA files remain retained; Caddy is not in the
+  running installation and its callback was removed from the app registration.
+
+Application change and executed checks:
+
+- `Authentication.create` formerly required both issuer and callback to be
+  loopback whenever either used HTTP. Two new transport tests first failed:
+  HTTPS issuer with an opted-in HTTP localhost callback was rejected, and an
+  unsupported loopback protocol reached discovery. The minimal fix validates each
+  URL independently: HTTPS or explicitly opted-in HTTP on exact loopback names.
+  Remote HTTP, lookalike localhost names and unsupported protocols remain rejected
+  before discovery. PKCE, issuer/token validation and Secure, HttpOnly cookies
+  remain intact. Existing callers and fixtures were inspected before the change.
+- `tests/auth.test.ts` and `tests/oidc-transport.test.ts`: three tests pass. The
+  existing identity/substitution/replay/client-auth test used a separate temporary
+  in-memory database on port 18000; that test container was stopped and removed.
+  These are fixture tests, not a Microsoft authorization-code completion.
+- Two Board/navigation tests passed before the transport change. Typecheck and
+  production build pass after the transport change. Build warnings are retained
+  in protected `logs/http-localhost-build.log`; no whole-suite rerun is claimed.
+- The real installation's HTTP home returned 200 after its normal redirect;
+  `/auth/login` returned 302 to the actual tenant's Microsoft authorization
+  endpoint with the expected app client ID, exact HTTP callback, PKCE `S256` and
+  a Secure login cookie. The self-check did not print cookies, state, nonce or
+  tokens and did not exchange an authorization code.
+- The collaborative browser displays the current TBFactory Sign in page at
+  `http://localhost:3001/?view=board`. User login and actual browser acceptance
+  of the login/session cookies are the next practical checks. No Factory
+  Membership, Organization resources, Repository credentials, AI configuration,
+  service hook, real checkout, report or publication has been provisioned yet.
+
+Next User-operated block: open `http://localhost:3001`, select **Sign in**, and use
+the existing Microsoft account. Expected initial result is the authenticated
+identity with **No Organization access** until explicit Membership provisioning.
+Report the displayed result or a nonsecret error code; do not share passwords,
+tokens or callback query strings. Issue 19 visual acceptance and initial recovery
+checks remain pending. The USD budget and AI limits are still proposals; no paid
+dispatch or provider-side PR effect has occurred. The original Docker evaluation,
+its fixtures, histories and volumes remain unchanged.
+
+### Real Microsoft login and initial Membership — 2026-10-11
+
+The User supplied a browser screenshot showing their authenticated Microsoft
+account, **Sign out**, and **No Organization access**. The installation database
+contains exactly one authenticated User, with issuer
+`https://login.microsoftonline.com/b6c9961c-042d-4750-aa03-00df693c6c5b/v2.0`,
+subject `OuPQ5GgZrrXUNjJQ5p1LVk_NmoYEQGeJFnKYvKJgDY0` and Factory User ID
+`7f8b45383283962261f1c0587f69da1872df543b408cff5f88f3f54d72a6e64b`.
+This is real authorization-code login evidence with the HTTP localhost callback
+and configured `client_secret_post`, including a usable browser session after
+the callback. No cookie, code, token or password was captured in the ticket.
+No identity was matched or merged by email; the Entra directory object ID was
+not used as the OIDC subject. Cross-browser compatibility is not claimed.
+
+The operator prepared protected
+`C:/protected/tbfactory-real-1905/real-review-bootstrap.json` from that exact stored
+issuer/subject pair, validated it against the installed provisioning schema,
+then executed the existing `operator.ts provision` command using the isolated
+installation environment. The resulting Factory Organization is `real-review`
+(display name **Real Azure DevOps Review**), Project `tdp` (display name **TDP**),
+Repository `tdp-project`. These are Factory identifiers, not verified provider GUIDs.
+
+Executed post-provision checks confirm an active Membership for the exact User,
+one Organization, correct Project/Repository ownership and 24 scoped policy rows:
+
+- Organization scope `real-review`: `organization.read`, `type.manage`.
+- Project scope `tdp`: `project.read`.
+- Repository scope `tdp-project`: `work-item.read`, `history.read`,
+  `workflow.read`, `artifact.read`, `repository.read`, `review.facts`,
+  `review.generate`, `approval.review-generate`, `approval.review-decide`,
+  `review.publish`, `approval.review-publish`, `review.supersede`, `workflow.cancel`,
+  `transition.prepare-review`, `approval.prepare-review`,
+  `transition.request-review`, `approval.request-review`,
+  `transition.finalize-review`, `approval.finalize-review`.
+- The 22 named execution/Approval grants use `allow`. Two additional `human`
+  policies on `review.generate` and `review.publish` require distinct human
+  checkpoints. Approval grants do not replace execution grants. No wildcard,
+  delegation, Team, Invitation, API Credential, sharing or unrelated Organization
+  permissions were installed. Service Identity permissions remain a later step.
+
+Assertions also confirm zero Work Items, AI configurations/resources, provider
+sources, Repository access configurations and publication configurations. This
+provisioning neither imports PR 1905 nor authorizes an agent to post to it.
+The User's explicit publication decision and paid-run budget remain pending.
+
+Next User-operated block: reload the authenticated Factory page, select
+**Real Azure DevOps Review**, and confirm that the empty Board loads without an
+authorization error. Exercise Tab in the foreground and report whether control
+focus is visibly indicated as part of Issue 19's remaining acceptance. Then use
+Administration to select Work Item Type version **4 · confirmed publication**
+before configuring source import. Membership visibility in the browser and the
+version selection have not yet been observed; keep their acceptance pending.
+
+### Membership UI and foreground focus accepted — 2026-10-11
+
+The User confirmed that authorization, navigation, access and focus all looked
+correct after the real login and scoped Membership setup. The User did not
+activate action buttons. Together with the retained exact issuer/subject,
+Membership and policy checks, this validates real Microsoft OIDC compatibility
+and Membership visibility without identity merging. Foreground focus and visual
+acceptance resolve Issue 19's final pending criterion; that ticket is closed.
+This ticket and the MVP remain open pending real-provider execution.
+
+A fresh database read confirms no `type_selection` rows, zero Work Items, zero
+Workflow Runs, zero AI configurations and zero publication configurations.
+The read neither changes selection nor performs a provider or AI effect.
+
+Next User-operated block: open **Administration > Work Item Type selection**,
+choose **4 · confirmed publication**, check **Enable creation**, and select
+**Save type selection**. Expected confirmation:
+**Selection saved for new Work Items. Existing versions are retained.**
+Then verify the retained version/enabled values before source import. This
+configuration operation does not start a Review, spend AI budget or publish to
+the PR. Version selection is still pending until the User performs and the
+installation records it; prior fixture actions are not substituted for this step.

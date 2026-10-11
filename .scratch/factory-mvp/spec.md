@@ -196,6 +196,8 @@ deployment-specific restart and recovery checks.
 
 ## Decisions so far
 
+- [User interface acceptance](issues/19-compact-kanban-and-work-item-detail.md#foreground-focus-and-user-visual-acceptance--2026-10-11): the User confirmed authorization, navigation, access and visible foreground focus in the isolated Microsoft-authenticated installation. Issue 19 is closed; the real Azure DevOps walkthrough in Issue 20 and overall MVP acceptance remain open.
+
 - [Compact interface implementation](issues/19-compact-kanban-and-work-item-detail.md#implementation-and-local-verification--2026-10-08): local Board/detail/creation/Administration changes pass 198 tests with one expected Windows skip; foreground focus and User visual acceptance remain pending. [First real Azure DevOps Review](issues/20-guided-real-azure-devops-review.md#walkthrough-preparation-and-tenant-supplied--2026-10-08): the tutorial records Repository, tenant and OpenRouter/max choices; live identity, credentials, budget, PR and provider execution remain unaccepted.
 
 - [Docker evaluation on the current PC](designs/docker-evaluation.md): the User selected Docker for the Factory and dependencies, acts as operator, and chose a Docker backup volume and SMTP4Dev mock inbox. The [executed evaluation](evidence/docker-evaluation.md) verifies the chosen runtime and records the accepted two-minute backup window and five-minute recovery-time objective; same-host results do not establish recovery after host loss or real deployment readiness.
@@ -409,6 +411,6 @@ the application changes require fresh checks. Issues 16 and 18 stay deferred and
 Issue 17 stays suspended. The scope does not include production deployment,
 identity merging, provider-side PR approval/merge, or the post-MVP model.
 
-- [ ] Complete Issue 19 and verify the final interface.
+- [x] Complete Issue 19 and verify the final interface.
 - [ ] Complete Issue 20 with the selected real User, Repository, pull request and AI.
 - [ ] Record User acceptance of the new gates before closing this map again.
