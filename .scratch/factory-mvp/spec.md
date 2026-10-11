@@ -2,7 +2,7 @@
 
 Status: ready-for-agent
 Labels: wayfinder:map
-State: closed
+State: open
 
 ## Destination
 
@@ -196,6 +196,8 @@ deployment-specific restart and recovery checks.
 
 ## Decisions so far
 
+- [Compact interface implementation](issues/19-compact-kanban-and-work-item-detail.md#implementation-and-local-verification--2026-10-08): local Board/detail/creation/Administration changes pass 198 tests with one expected Windows skip; foreground focus and User visual acceptance remain pending. [First real Azure DevOps Review](issues/20-guided-real-azure-devops-review.md#walkthrough-preparation-and-tenant-supplied--2026-10-08): the tutorial records Repository, tenant and OpenRouter/max choices; live identity, credentials, budget, PR and provider execution remain unaccepted.
+
 - [Docker evaluation on the current PC](designs/docker-evaluation.md): the User selected Docker for the Factory and dependencies, acts as operator, and chose a Docker backup volume and SMTP4Dev mock inbox. The [executed evaluation](evidence/docker-evaluation.md) verifies the chosen runtime and records the accepted two-minute backup window and five-minute recovery-time objective; same-host results do not establish recovery after host loss or real deployment readiness.
 
 - [Reopen installation acceptance after assumption review](issues/12-persistent-shared-installation.md#reopened-after-assumption-review--2026-10-07): local installation remains delivered; ticket and specification stay open until manual deployment/recovery checks are completed. Node is provisional locally, MVP backup interruption is accepted subject to measured limits, and the broader recovery redesign is deferred.
@@ -351,7 +353,7 @@ does not substitute for executed installation work.
 ## Further Notes
 
 - Source of truth: [accepted foundations](../../docs/foundations.md), [canonical glossary](../../CONTEXT.md), and [accepted ADRs](../../docs/adr/). The foundations record agreement through Q46 on 2026-10-02. All ten ADRs are accepted; no conflicting architecture proposal is introduced here.
-- This is an umbrella MVP specification. Its `ready-for-agent` status is the tracker role; `State: closed` records the accepted Docker MVP evaluation. The implementation resolutions above own completed design and historical local behavioral evidence. Issue 12 owns manual deployment acceptance. Issue 17 retains an open, suspended diagnostic for the unreproduced ownership report and is not a current blocker; Issues 16 and 18 are explicitly deferred. Any implementation that depends on a remaining unresolved choice must first complete that design.
+- This is an umbrella MVP specification. Its `ready-for-agent` status is the tracker role; `State: open` records the User-approved additional usability and real-provider acceptance gates. The Docker MVP evaluation remains accepted historical evidence. The implementation resolutions above own completed design and historical local behavioral evidence. Issue 12 owns manual deployment acceptance. Issue 17 retains an open, suspended diagnostic for the unreproduced ownership report and is not a current blocker; Issues 16 and 18 are explicitly deferred. Any implementation that depends on a remaining unresolved choice must first complete that design.
 - The source's technical investigation was recorded on 2026-10-01. This synthesis does not refresh external documentation. The storage prototype selected LibSQL and validated the selected provider's pinned dependency set recorded in the linked storage-feasibility ticket.
 - Publication to the local issue tracker consists of this specification. No external issue system, additional architecture document, or combined implementation-ticket file is needed.
 
@@ -395,3 +397,18 @@ Issue 12 and this map close for the selected same-host Docker evaluation. The
 accepted limits. Independent host-loss recovery and off-host root-key custody
 remain prerequisites before real deployment. Issue 17 remains suspended without
 a claimed correction; Issues 16 and 18 remain explicitly deferred.
+
+### MVP acceptance reopened for usability and real-provider walkthrough — 2026-10-08
+
+The User approved two additional acceptance gates after the Docker evaluation:
+[compact Kanban and Work Item detail](issues/19-compact-kanban-and-work-item-detail.md)
+and [a guided real Azure DevOps Review](issues/20-guided-real-azure-devops-review.md).
+This map is open until both are completed and the User accepts their results.
+Issue 12 and its same-host Docker operational evidence remain accepted and closed;
+the application changes require fresh checks. Issues 16 and 18 stay deferred and
+Issue 17 stays suspended. The scope does not include production deployment,
+identity merging, provider-side PR approval/merge, or the post-MVP model.
+
+- [ ] Complete Issue 19 and verify the final interface.
+- [ ] Complete Issue 20 with the selected real User, Repository, pull request and AI.
+- [ ] Record User acceptance of the new gates before closing this map again.

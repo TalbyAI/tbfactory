@@ -22,12 +22,12 @@ const aiSchema = z.strictObject({
       z.strictObject({
         id: z.string().min(1).max(200),
         tools: z.boolean(),
-        reasoning: z.array(z.enum(['none', 'low', 'medium', 'high'])).default([]),
+        reasoning: z.array(z.enum(['none', 'low', 'medium', 'high', 'max'])).default([]),
       }),
     )
     .min(1)
     .max(50),
-  reasoningEffort: z.enum(['none', 'low', 'medium', 'high']).optional(),
+  reasoningEffort: z.enum(['none', 'low', 'medium', 'high', 'max']).optional(),
   upstream: z.enum(['openai']).optional(),
 });
 export const reviewConfigSchema = z.strictObject({

@@ -2,12 +2,16 @@ import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { uiRead, uiSession, uiWrite } from '../ui-functions';
 import { TransitionBoard } from '../transition-board';
-
-export const Route = createFileRoute('/')({ loader: () => uiSession(), component: FactoryPage });
+import { factorySearch } from '../factory-navigation';
+export const Route = createFileRoute('/')({
+  validateSearch: factorySearch,
+  loader: () => uiSession(),
+  component: FactoryPage,
+});
 type RecordView = { id: string; [field: string]: any };
-
 function FactoryPage() {
   const session = Route.useLoaderData();
+  const { view } = Route.useSearch();
   const [organizations, setOrganizations] = useState<RecordView[]>([]);
   const [organization, setOrganization] = useState('');
   const [projects, setProjects] = useState<RecordView[]>([]);
@@ -17,6 +21,7 @@ function FactoryPage() {
   const [cursor, setCursor] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(!!session);
   const [invitationToken, setInvitationToken] = useState('');
   const [preview, setPreview] = useState<any>(null);
   const [issuedInvitation, setIssuedInvitation] = useState<any>(null);
@@ -83,7 +88,7 @@ function FactoryPage() {
             await historyPage(existing, false, initialOrganization);
           }
         }
-      });
+      }).finally(() => setLoading(false));
   }, []);
   useEffect(() => {
     if (!session || !invitationToken) return;
@@ -133,9 +138,14 @@ function FactoryPage() {
   const repositories = projects.find((p) => p.id === project)?.repositories ?? [];
   return (
     <main>
+      {session && organization && (
+        <a className="skip-link" href="#workspace">
+          Skip to workspace
+        </a>
+      )}
       <header>
         <div>
-          <small>FACTORY / WORK ITEMS</small>
+          <small>HUMAN + AGENT REVIEW</small>
           <h1>TBFactory</h1>
         </div>
         {session && (
@@ -181,7 +191,9 @@ function FactoryPage() {
               </button>
             </section>
           )}
-          {!organizations.length ? (
+          {loading ? (
+            <p role="status">Loading workspace…</p>
+          ) : !organizations.length ? (
             <section>
               <h2>No Organization access</h2>
               <p>
@@ -196,7 +208,11 @@ function FactoryPage() {
                 <select
                   disabled={busy}
                   value={organization}
-                  onChange={(e) => void selectOrganization(e.target.value)}
+                  onChange={(e) =>
+                    location.assign(
+                      e.target.value ? `/?organization=${encodeURIComponent(e.target.value)}` : '/',
+                    )
+                  }
                 >
                   <option value="">Select an Organization</option>
                   {organizations.map((o) => (
@@ -208,409 +224,465 @@ function FactoryPage() {
               </label>
               {organization && (
                 <>
-                  <TransitionBoard
-                    key={organization}
-                    organization={organization}
-                    user={session.user}
-                    refreshKey={`${item?.id}:${item?.state}:${item?.transitionSequence ?? 0}`}
-                    openItem={async (current) => {
-                      setItem(current);
-                      await historyPage(current);
-                    }}
-                  />
-                  <section>
-                    <h2>Create a Work Item</h2>
-                    <form
-                      onSubmit={(e) => {
-                        const data = form(e);
-                        void perform(async () => {
-                          const created = await write(`${base}/work-items`, {
-                            project,
-                            ...(data.get('repository')
-                              ? { repository: data.get('repository') }
-                              : {}),
-                            title: data.get('title'),
-                            type: data.get('type'),
-                            ...(data.get('publicationMode')
-                              ? { publicationMode: data.get('publicationMode') }
-                              : {}),
-                          });
-                          setItem(created.workItem);
-                          await historyPage(created.workItem);
-                          history.replaceState(
-                            null,
-                            '',
-                            `/?organization=${organization}&workItem=${created.workItem.id}`,
-                          );
-                        });
-                      }}
+                  <nav className="workspace-nav" aria-label="Workspace">
+                    <a
+                      href={`/?organization=${organization}`}
+                      aria-current={view === 'board' ? 'page' : undefined}
                     >
-                      <label>
-                        Title
-                        <input name="title" required maxLength={300} />
-                      </label>
-                      <label>
-                        Project
-                        <select
-                          value={project}
-                          required
-                          onChange={(e) => setProject(e.target.value)}
-                        >
-                          {projects.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.name}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label>
-                        Repository (optional)
-                        <select name="repository" key={project}>
-                          <option value="">No Repository</option>
-                          {repositories.map((r: RecordView) => (
-                            <option key={r.id} value={r.id}>
-                              {r.name}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label>
-                        Work Item Type
-                        <select name="type">
-                          <option value="pull-request-review">pull-request-review</option>
-                        </select>
-                      </label>
-                      <label>
-                        Publication mode
-                        <select name="publicationMode" defaultValue="">
-                          <option value="">Repository default</option>
-                          <option value="confirmed-content">Confirmed-content comments</option>
-                          <option value="report-reference">
-                            Restricted report reference (version 5)
-                          </option>
-                        </select>
-                      </label>
-                      <button disabled={busy || !project}>Create Work Item</button>
-                    </form>
-                  </section>
-                  <section>
-                    <h2>Open a Work Item</h2>
-                    <form
-                      onSubmit={(e) => {
-                        const data = form(e);
-                        void perform(async () => {
-                          const existing = await read(
-                            `${base}/work-items/${encodeURIComponent(String(data.get('id')))}`,
-                          );
-                          setItem(existing);
-                          await historyPage(existing);
-                        });
-                      }}
+                      Board
+                    </a>
+                    <a
+                      href={`/?organization=${organization}&view=create`}
+                      aria-current={view === 'create' ? 'page' : undefined}
                     >
-                      <label>
-                        Work Item identifier
-                        <input name="id" required />
-                      </label>
-                      <button className="secondary" disabled={busy}>
-                        Open Work Item
-                      </button>
-                    </form>
-                  </section>
-                  {item && (
-                    <section>
-                      <small>{item.id}</small>
-                      <h2>{item.title}</h2>
-                      <p>
-                        Factory state: <strong>{item.state}</strong> · {item.type} · state-flow
-                        version {item.version}
-                      </p>
-                      <h3>Fact history</h3>
-                      {facts.map((fact) => (
-                        <article key={fact.id}>
-                          <strong>{fact.kind}</strong>
-                          <p>
-                            <small>
-                              {new Date(fact.recordedAt).toISOString()} · Actor {fact.actor}
-                            </small>
-                          </p>
-                          <pre>{JSON.stringify(fact.payload, null, 2)}</pre>
-                          {fact.correctedFact && <small>Corrects Fact {fact.correctedFact}</small>}
-                          <p>
-                            <small>Fact {fact.id}</small>
-                          </p>
-                        </article>
-                      ))}
-                      {cursor && (
-                        <button
-                          className="secondary"
-                          disabled={busy}
-                          onClick={() => perform(() => historyPage(item, true))}
+                      Create Work Item
+                    </a>
+                    <a
+                      href={`/?organization=${organization}&view=settings`}
+                      aria-current={view === 'settings' ? 'page' : undefined}
+                    >
+                      Administration
+                    </a>
+                    {view === 'detail' && <span aria-current="page">Work Item detail</span>}
+                  </nav>
+                  <div id="workspace" tabIndex={-1}>
+                    {view === 'detail' && item && (
+                      <div className="detail-heading">
+                        <small>WORK ITEM · {item.id}</small>
+                        <h2>{item.title}</h2>
+                        <p>
+                          {projects
+                            .flatMap((p) => p.repositories ?? [])
+                            .find((r: RecordView) => r.id === item.repository)?.name ??
+                            'No Repository'}{' '}
+                          · {item.state}
+                        </p>
+                        <a href={`/?organization=${organization}`}>Back to Board</a>
+                      </div>
+                    )}
+                    {(view === 'board' || view === 'settings' || (view === 'detail' && item)) && (
+                      <TransitionBoard
+                        key={organization}
+                        organization={organization}
+                        user={session.user}
+                        view={view as 'board' | 'settings' | 'detail'}
+                        selectedItem={item?.id}
+                        repositories={projects.flatMap((p) => p.repositories ?? [])}
+                        refreshKey={`${item?.id}:${item?.state}:${item?.transitionSequence ?? 0}`}
+                        openItem={async (current) => {
+                          setItem(current);
+                          await historyPage(current);
+                        }}
+                      />
+                    )}
+                    {view === 'detail' && !item && !error && (
+                      <p role="status">Loading Work Item…</p>
+                    )}
+                    {view === 'create' && (
+                      <section>
+                        <h2>Create a Work Item</h2>
+                        <form
+                          onSubmit={(e) => {
+                            const data = form(e);
+                            void perform(async () => {
+                              const created = await write(`${base}/work-items`, {
+                                project,
+                                ...(data.get('repository')
+                                  ? { repository: data.get('repository') }
+                                  : {}),
+                                title: data.get('title'),
+                                type: data.get('type'),
+                                ...(data.get('publicationMode')
+                                  ? { publicationMode: data.get('publicationMode') }
+                                  : {}),
+                              });
+                              setItem(created.workItem);
+                              await historyPage(created.workItem);
+                              location.assign(
+                                `/?organization=${organization}&workItem=${created.workItem.id}`,
+                              );
+                            });
+                          }}
                         >
-                          Load more Facts
-                        </button>
-                      )}
-                      <form
-                        onSubmit={(e) => {
-                          const data = form(e);
-                          void perform(async () => {
-                            await write(`${base}/work-items/${item.id}/notes`, {
-                              text: data.get('text'),
+                          <label>
+                            Title
+                            <input name="title" required maxLength={300} />
+                          </label>
+                          <label>
+                            Project
+                            <select
+                              value={project}
+                              required
+                              onChange={(e) => setProject(e.target.value)}
+                            >
+                              {projects.map((p) => (
+                                <option key={p.id} value={p.id}>
+                                  {p.name}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label>
+                            Repository (optional)
+                            <select name="repository" key={project}>
+                              <option value="">No Repository</option>
+                              {repositories.map((r: RecordView) => (
+                                <option key={r.id} value={r.id}>
+                                  {r.name}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label>
+                            Work Item Type
+                            <select name="type">
+                              <option value="pull-request-review">pull-request-review</option>
+                            </select>
+                          </label>
+                          <label>
+                            Publication mode
+                            <select name="publicationMode" defaultValue="">
+                              <option value="">Repository default</option>
+                              <option value="confirmed-content">Confirmed-content comments</option>
+                              <option value="report-reference">
+                                Restricted report reference (version 5)
+                              </option>
+                            </select>
+                          </label>
+                          <button disabled={busy || !project}>Create Work Item</button>
+                        </form>
+                      </section>
+                    )}
+                    {view === 'create' && (
+                      <section>
+                        <h2>Open a Work Item</h2>
+                        <form
+                          onSubmit={(e) => {
+                            const data = form(e);
+                            void perform(async () => {
+                              const existing = await read(
+                                `${base}/work-items/${encodeURIComponent(String(data.get('id')))}`,
+                              );
+                              setItem(existing);
+                              await historyPage(existing);
+                              location.assign(
+                                `/?organization=${organization}&workItem=${existing.id}`,
+                              );
                             });
-                            await historyPage(item);
-                          });
-                        }}
-                      >
-                        <label>
-                          Manual note
-                          <textarea name="text" required maxLength={10000} />
-                        </label>
-                        <button disabled={busy}>Add note</button>
-                      </form>
-                      <form
-                        onSubmit={(e) => {
-                          const data = form(e);
-                          void perform(async () => {
-                            await write(`${base}/work-items/${item.id}/corrections`, {
-                              fact: data.get('fact'),
-                              text: data.get('text'),
-                            });
-                            await historyPage(item);
-                          });
-                        }}
-                      >
-                        <label>
-                          Fact to correct
-                          <input name="fact" required />
-                        </label>
-                        <label>
-                          Correction
-                          <textarea name="text" required maxLength={10000} />
-                        </label>
-                        <button disabled={busy}>Append correction</button>
-                      </form>
-                      <form
-                        onSubmit={(e) => {
-                          const data = form(e);
-                          void perform(async () => {
-                            await write(`${base}/work-items/${item.id}/references`, {
-                              provider: data.get('provider'),
-                              locator: data.get('locator'),
-                            });
-                            await historyPage(item);
-                          });
-                        }}
-                      >
-                        <label>
-                          Provider
-                          <select name="provider">
-                            <option value="github">GitHub</option>
-                            <option value="azure-devops">Azure DevOps</option>
-                          </select>
-                        </label>
-                        <label>
-                          Canonical pull request URL
-                          <input type="url" name="locator" required />
-                        </label>
-                        <button disabled={busy}>Add external reference</button>
-                      </form>
-                    </section>
-                  )}
-                  <div className="columns">
-                    <section>
-                      <h2>Issue an Invitation</h2>
-                      <form
-                        onSubmit={(e) => {
-                          const data = form(e);
-                          void perform(async () => {
-                            const result = await write(`${base}/invitations`, {
-                              email: data.get('email'),
-                              grants: data.getAll('grant').map((activity) => ({
-                                activity,
-                                scope: 'organization',
-                                scopeId: organization,
-                                effect: 'allow',
-                              })),
-                            });
-                            setIssuedInvitation(result);
-                          });
-                        }}
-                      >
-                        <label>
-                          Invited email
-                          <input name="email" type="email" required />
-                        </label>
-                        <fieldset>
-                          <legend>Initial Activities</legend>
-                          {[
-                            'organization.read',
-                            'project.read',
-                            'work-item.create',
-                            'work-item.read',
-                            'history.read',
-                            'note.append',
-                            'correction.append',
-                            'reference.append',
-                          ].map((activity) => (
-                            <label key={activity}>
-                              <input
-                                type="checkbox"
-                                name="grant"
-                                value={activity}
-                                defaultChecked={[
-                                  'organization.read',
-                                  'project.read',
-                                  'work-item.read',
-                                  'history.read',
-                                ].includes(activity)}
-                              />
-                              {activity}
-                            </label>
-                          ))}
-                        </fieldset>
-                        <button disabled={busy}>Issue Invitation</button>
-                      </form>
-                      {issuedInvitation && (
-                        <div className="secret">
-                          {issuedInvitation.token ? (
-                            <>
-                              <label>
-                                Invitation link
-                                <input
-                                  readOnly
-                                  value={`${location.origin}/?invitation=${issuedInvitation.token}`}
-                                />
-                              </label>
-                              <button
-                                onClick={() =>
-                                  navigator.clipboard.writeText(
-                                    `${location.origin}/?invitation=${issuedInvitation.token}`,
-                                  )
-                                }
-                              >
-                                Copy Invitation link
-                              </button>
-                            </>
-                          ) : (
+                          }}
+                        >
+                          <label>
+                            Work Item identifier
+                            <input name="id" required />
+                          </label>
+                          <button className="secondary" disabled={busy}>
+                            Open Work Item
+                          </button>
+                        </form>
+                      </section>
+                    )}
+                    {view === 'detail' && item && (
+                      <section>
+                        <h2>History and notes</h2>
+                        <p>
+                          Factory state: <strong>{item.state}</strong> · {item.type} · state-flow
+                          version {item.version}
+                        </p>
+                        <h3>Fact history</h3>
+                        {facts.map((fact) => (
+                          <article key={fact.id}>
+                            <strong>{fact.kind}</strong>
                             <p>
-                              The one-time link is unavailable. Revoke this Invitation and issue a
-                              new one.
+                              <small>
+                                {new Date(fact.recordedAt).toISOString()} · Actor {fact.actor}
+                              </small>
                             </p>
-                          )}
+                            <details>
+                              <summary>Fact details</summary>
+                              <pre>{JSON.stringify(fact.payload, null, 2)}</pre>
+                            </details>
+                            {fact.correctedFact && (
+                              <small>Corrects Fact {fact.correctedFact}</small>
+                            )}
+                            <p>
+                              <small>Fact {fact.id}</small>
+                            </p>
+                          </article>
+                        ))}
+                        {cursor && (
                           <button
                             className="secondary"
                             disabled={busy}
-                            onClick={() =>
-                              perform(async () => {
-                                await write(
-                                  `${base}/invitations/${issuedInvitation.invitation.id}/revoke`,
-                                  {},
-                                );
-                                setIssuedInvitation(null);
-                              })
-                            }
+                            onClick={() => perform(() => historyPage(item, true))}
                           >
-                            Revoke Invitation
+                            Load more Facts
                           </button>
-                        </div>
-                      )}
-                    </section>
-                    <section>
-                      <h2>API credentials</h2>
-                      <form
-                        onSubmit={(e) => {
-                          const data = form(e);
-                          void perform(async () => {
-                            const result = await write(`${base}/api-credentials`, {
-                              label: data.get('label'),
-                              activities: String(data.get('activities'))
-                                .split(',')
-                                .map((s) => s.trim()),
-                              expiresAt: Date.now() + Number(data.get('days')) * 86400000,
+                        )}
+                        <form
+                          onSubmit={(e) => {
+                            const data = form(e);
+                            void perform(async () => {
+                              await write(`${base}/work-items/${item.id}/notes`, {
+                                text: data.get('text'),
+                              });
+                              await historyPage(item);
                             });
-                            setCredential(result);
-                            setCredentials((previous) => [
-                              ...previous.filter((c) => c.id !== result.credential.id),
-                              result.credential,
-                            ]);
-                          });
-                        }}
-                      >
-                        <label>
-                          Credential label
-                          <input name="label" required maxLength={200} />
-                        </label>
-                        <label>
-                          Activities (comma separated)
-                          <input
-                            name="activities"
-                            defaultValue="organization.read,project.read,work-item.read,history.read"
-                            required
-                          />
-                        </label>
-                        <label>
-                          Lifetime in days
-                          <input
-                            name="days"
-                            type="number"
-                            min="1"
-                            max="90"
-                            defaultValue="30"
-                            required
-                          />
-                        </label>
-                        <button disabled={busy}>Create API credential</button>
-                      </form>
-                      {credential && (
-                        <div className="secret">
-                          {credential.token ? (
-                            <>
-                              <p>Copy this token now. It is shown once.</p>
-                              <label>
-                                API token
-                                <input readOnly value={credential.token} />
-                              </label>
+                          }}
+                        >
+                          <label>
+                            Manual note
+                            <textarea name="text" required maxLength={10000} />
+                          </label>
+                          <button disabled={busy}>Add note</button>
+                        </form>
+                        <form
+                          onSubmit={(e) => {
+                            const data = form(e);
+                            void perform(async () => {
+                              await write(`${base}/work-items/${item.id}/corrections`, {
+                                fact: data.get('fact'),
+                                text: data.get('text'),
+                              });
+                              await historyPage(item);
+                            });
+                          }}
+                        >
+                          <label>
+                            Fact to correct
+                            <input name="fact" required />
+                          </label>
+                          <label>
+                            Correction
+                            <textarea name="text" required maxLength={10000} />
+                          </label>
+                          <button disabled={busy}>Append correction</button>
+                        </form>
+                        <form
+                          onSubmit={(e) => {
+                            const data = form(e);
+                            void perform(async () => {
+                              await write(`${base}/work-items/${item.id}/references`, {
+                                provider: data.get('provider'),
+                                locator: data.get('locator'),
+                              });
+                              await historyPage(item);
+                            });
+                          }}
+                        >
+                          <label>
+                            Provider
+                            <select name="provider">
+                              <option value="github">GitHub</option>
+                              <option value="azure-devops">Azure DevOps</option>
+                            </select>
+                          </label>
+                          <label>
+                            Canonical pull request URL
+                            <input type="url" name="locator" required />
+                          </label>
+                          <button disabled={busy}>Add external reference</button>
+                        </form>
+                      </section>
+                    )}
+                    {view === 'settings' && (
+                      <div className="columns">
+                        <section>
+                          <h2>Issue an Invitation</h2>
+                          <form
+                            onSubmit={(e) => {
+                              const data = form(e);
+                              void perform(async () => {
+                                const result = await write(`${base}/invitations`, {
+                                  email: data.get('email'),
+                                  grants: data.getAll('grant').map((activity) => ({
+                                    activity,
+                                    scope: 'organization',
+                                    scopeId: organization,
+                                    effect: 'allow',
+                                  })),
+                                });
+                                setIssuedInvitation(result);
+                              });
+                            }}
+                          >
+                            <label>
+                              Invited email
+                              <input name="email" type="email" required />
+                            </label>
+                            <fieldset>
+                              <legend>Initial Activities</legend>
+                              {[
+                                'organization.read',
+                                'project.read',
+                                'work-item.create',
+                                'work-item.read',
+                                'history.read',
+                                'note.append',
+                                'correction.append',
+                                'reference.append',
+                              ].map((activity) => (
+                                <label key={activity}>
+                                  <input
+                                    type="checkbox"
+                                    name="grant"
+                                    value={activity}
+                                    defaultChecked={[
+                                      'organization.read',
+                                      'project.read',
+                                      'work-item.read',
+                                      'history.read',
+                                    ].includes(activity)}
+                                  />
+                                  {activity}
+                                </label>
+                              ))}
+                            </fieldset>
+                            <button disabled={busy}>Issue Invitation</button>
+                          </form>
+                          {issuedInvitation && (
+                            <div className="secret">
+                              {issuedInvitation.token ? (
+                                <>
+                                  <label>
+                                    Invitation link
+                                    <input
+                                      readOnly
+                                      value={`${location.origin}/?invitation=${issuedInvitation.token}`}
+                                    />
+                                  </label>
+                                  <button
+                                    onClick={() =>
+                                      navigator.clipboard.writeText(
+                                        `${location.origin}/?invitation=${issuedInvitation.token}`,
+                                      )
+                                    }
+                                  >
+                                    Copy Invitation link
+                                  </button>
+                                </>
+                              ) : (
+                                <p>
+                                  The one-time link is unavailable. Revoke this Invitation and issue
+                                  a new one.
+                                </p>
+                              )}
                               <button
-                                onClick={() => navigator.clipboard.writeText(credential.token)}
+                                className="secondary"
+                                disabled={busy}
+                                onClick={() =>
+                                  perform(async () => {
+                                    await write(
+                                      `${base}/invitations/${issuedInvitation.invitation.id}/revoke`,
+                                      {},
+                                    );
+                                    setIssuedInvitation(null);
+                                  })
+                                }
                               >
-                                Copy API token
+                                Revoke Invitation
                               </button>
-                            </>
-                          ) : (
-                            <p>
-                              The one-time token is unavailable. Revoke the credential and issue a
-                              new one.
-                            </p>
+                            </div>
                           )}
-                        </div>
-                      )}
-                      {credentials.map((c) => (
-                        <article key={c.id}>
-                          <p>
-                            {c.label} · Expires {new Date(c.expiresAt).toISOString()} ·{' '}
-                            {c.revoked ? 'Revoked' : 'Active'}
-                          </p>
-                          {!c.revoked && (
-                            <button
-                              className="secondary"
-                              disabled={busy}
-                              onClick={() =>
-                                perform(async () => {
-                                  await write(`${base}/api-credentials/${c.id}/revoke`, {});
-                                  setCredentials((previous) =>
-                                    previous.map((p) =>
-                                      p.id === c.id ? { ...p, revoked: true } : p,
-                                    ),
-                                  );
-                                  setCredential(null);
-                                })
-                              }
-                            >
-                              Revoke {c.label}
-                            </button>
+                        </section>
+                        <section>
+                          <h2>API credentials</h2>
+                          <form
+                            onSubmit={(e) => {
+                              const data = form(e);
+                              void perform(async () => {
+                                const result = await write(`${base}/api-credentials`, {
+                                  label: data.get('label'),
+                                  activities: String(data.get('activities'))
+                                    .split(',')
+                                    .map((s) => s.trim()),
+                                  expiresAt: Date.now() + Number(data.get('days')) * 86400000,
+                                });
+                                setCredential(result);
+                                setCredentials((previous) => [
+                                  ...previous.filter((c) => c.id !== result.credential.id),
+                                  result.credential,
+                                ]);
+                              });
+                            }}
+                          >
+                            <label>
+                              Credential label
+                              <input name="label" required maxLength={200} />
+                            </label>
+                            <label>
+                              Activities (comma separated)
+                              <input
+                                name="activities"
+                                defaultValue="organization.read,project.read,work-item.read,history.read"
+                                required
+                              />
+                            </label>
+                            <label>
+                              Lifetime in days
+                              <input
+                                name="days"
+                                type="number"
+                                min="1"
+                                max="90"
+                                defaultValue="30"
+                                required
+                              />
+                            </label>
+                            <button disabled={busy}>Create API credential</button>
+                          </form>
+                          {credential && (
+                            <div className="secret">
+                              {credential.token ? (
+                                <>
+                                  <p>Copy this token now. It is shown once.</p>
+                                  <label>
+                                    API token
+                                    <input readOnly value={credential.token} />
+                                  </label>
+                                  <button
+                                    onClick={() => navigator.clipboard.writeText(credential.token)}
+                                  >
+                                    Copy API token
+                                  </button>
+                                </>
+                              ) : (
+                                <p>
+                                  The one-time token is unavailable. Revoke the credential and issue
+                                  a new one.
+                                </p>
+                              )}
+                            </div>
                           )}
-                        </article>
-                      ))}
-                    </section>
+                          {credentials.map((c) => (
+                            <article key={c.id}>
+                              <p>
+                                {c.label} · Expires {new Date(c.expiresAt).toISOString()} ·{' '}
+                                {c.revoked ? 'Revoked' : 'Active'}
+                              </p>
+                              {!c.revoked && (
+                                <button
+                                  className="secondary"
+                                  disabled={busy}
+                                  onClick={() =>
+                                    perform(async () => {
+                                      await write(`${base}/api-credentials/${c.id}/revoke`, {});
+                                      setCredentials((previous) =>
+                                        previous.map((p) =>
+                                          p.id === c.id ? { ...p, revoked: true } : p,
+                                        ),
+                                      );
+                                      setCredential(null);
+                                    })
+                                  }
+                                >
+                                  Revoke {c.label}
+                                </button>
+                              )}
+                            </article>
+                          ))}
+                        </section>
+                      </div>
+                    )}
                   </div>
                 </>
               )}

@@ -13,6 +13,11 @@ immutable confirmed-only report Artifacts. See the
 [sharing runbook](docs/operations/limited-report-sharing.md) for recipient access,
 expiry, Approval, revocation and retention.
 
+For a guided first run with a real Microsoft account, Azure DevOps pull request
+and OpenRouter, follow [Your first real Azure DevOps Review](docs/operations/first-azure-devops-review.md).
+The work interface separates compact Board cards, Work Item detail, creation and
+Administration; existing Work Item URLs remain valid.
+
 ## Runtime and commands
 
 Use Node.js 24.14.1 (supported range 24.x), npm 11 and SurrealDB 3.3.0 with a persistent

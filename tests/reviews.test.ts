@@ -1038,7 +1038,7 @@ test('Confirmed-stop intake recovery keeps exclusive ownership and completes one
   }
 });
 
-test('OpenRouter enforces explicit upstream routing and retains reported cost', async () => {
+test('OpenRouter forwards max reasoning effort, enforces upstream routing and retains reported cost', async () => {
   const r = await reviewRuntime();
   try {
     r.behavior('report');
@@ -1048,8 +1048,8 @@ test('OpenRouter enforces explicit upstream routing and retains reported cost', 
         adapter: 'openrouter',
         model: 'openai/fixture-model',
         upstream: 'openai',
-        permittedModels: [{ id: 'openai/fixture-model', tools: true, reasoning: ['low'] }],
-        reasoningEffort: 'low',
+        permittedModels: [{ id: 'openai/fixture-model', tools: true, reasoning: ['max'] }],
+        reasoningEffort: 'max',
       },
     });
     const path = await r.createItem('openrouter');
@@ -1061,7 +1061,7 @@ test('OpenRouter enforces explicit upstream routing and retains reported cost', 
       allow_fallbacks: false,
       require_parameters: true,
     });
-    assert.deepEqual(r.requests[0].body.reasoning, { effort: 'low' });
+    assert.deepEqual(r.requests[0].body.reasoning, { effort: 'max' });
     assert.equal(view.consumption[0].cost, 0.0001);
   } finally {
     await r.close();
