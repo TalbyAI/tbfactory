@@ -10,6 +10,12 @@ Deliver the TBFactory MVP described below, resolving its recorded human checkpoi
 
 ## Notes
 
+The User accepted and closed the first MVP version on 2026-10-15 after the real
+Azure DevOps walkthrough and manual verification of Factory publication. This is
+first-version functional acceptance with the documented limits, not production
+readiness or a claim that every live acceptance exercise ran. Subsequent work is
+tracked separately in Issues 21–23 and the previously deferred tickets.
+
 This existing implementation specification is the first map. Execution is included through its child tickets; the storage-feasibility ticket explicitly authorizes an isolated prototype. Follow the repository's local Markdown tracker, foundations, and canonical domain language. Work through one ticket per session.
 
 ## Problem Statement
@@ -196,6 +202,12 @@ deployment-specific restart and recovery checks.
 
 ## Decisions so far
 
+- [First MVP version accepted](issues/20-guided-real-azure-devops-review.md#first-mvp-version-accepted-by-the-user--2026-10-15): real Azure DevOps ingestion, AI Review, complete human Review Decision and Factory publication were verified and accepted. Issue 20 and this map close by explicit User acceptance; user-experience improvements, review-skill quality and the unexecuted live finalization exercise continue separately in Issues 21–23.
+
+- [User interface acceptance](issues/19-compact-kanban-and-work-item-detail.md#foreground-focus-and-user-visual-acceptance--2026-10-11): the User confirmed authorization, navigation, access and visible foreground focus in the isolated Microsoft-authenticated installation. Issue 19 is closed; the real Azure DevOps walkthrough in Issue 20 and overall MVP acceptance remain open.
+
+- [Compact interface implementation](issues/19-compact-kanban-and-work-item-detail.md#implementation-and-local-verification--2026-10-08): local Board/detail/creation/Administration changes pass 198 tests with one expected Windows skip; foreground focus and User visual acceptance remain pending. [First real Azure DevOps Review](issues/20-guided-real-azure-devops-review.md#walkthrough-preparation-and-tenant-supplied--2026-10-08): the tutorial records Repository, tenant and OpenRouter/max choices; live identity, credentials, budget, PR and provider execution remain unaccepted.
+
 - [Docker evaluation on the current PC](designs/docker-evaluation.md): the User selected Docker for the Factory and dependencies, acts as operator, and chose a Docker backup volume and SMTP4Dev mock inbox. The [executed evaluation](evidence/docker-evaluation.md) verifies the chosen runtime and records the accepted two-minute backup window and five-minute recovery-time objective; same-host results do not establish recovery after host loss or real deployment readiness.
 
 - [Reopen installation acceptance after assumption review](issues/12-persistent-shared-installation.md#reopened-after-assumption-review--2026-10-07): local installation remains delivered; ticket and specification stay open until manual deployment/recovery checks are completed. Node is provisional locally, MVP backup interruption is accepted subject to measured limits, and the broader recovery redesign is deferred.
@@ -351,7 +363,7 @@ does not substitute for executed installation work.
 ## Further Notes
 
 - Source of truth: [accepted foundations](../../docs/foundations.md), [canonical glossary](../../CONTEXT.md), and [accepted ADRs](../../docs/adr/). The foundations record agreement through Q46 on 2026-10-02. All ten ADRs are accepted; no conflicting architecture proposal is introduced here.
-- This is an umbrella MVP specification. Its `ready-for-agent` status is the tracker role; `State: closed` records the accepted Docker MVP evaluation. The implementation resolutions above own completed design and historical local behavioral evidence. Issue 12 owns manual deployment acceptance. Issue 17 retains an open, suspended diagnostic for the unreproduced ownership report and is not a current blocker; Issues 16 and 18 are explicitly deferred. Any implementation that depends on a remaining unresolved choice must first complete that design.
+- This is an umbrella MVP specification. Its `ready-for-agent` status is the tracker role; `State: closed` records first-version User acceptance on 2026-10-15. The Docker MVP evaluation remains accepted historical evidence. The implementation resolutions above own completed design and historical local behavioral evidence. Issue 12 owns manual deployment acceptance. Issue 17 retains an open, suspended diagnostic for the unreproduced ownership report and is not a current blocker; Issues 16 and 18 remain deferred. Issues 21–23 retain the next-iteration improvements and unexecuted live finalization exercise. Any implementation that depends on a remaining unresolved choice must first complete that design.
 - The source's technical investigation was recorded on 2026-10-01. This synthesis does not refresh external documentation. The storage prototype selected LibSQL and validated the selected provider's pinned dependency set recorded in the linked storage-feasibility ticket.
 - Publication to the local issue tracker consists of this specification. No external issue system, additional architecture document, or combined implementation-ticket file is needed.
 
@@ -395,3 +407,54 @@ Issue 12 and this map close for the selected same-host Docker evaluation. The
 accepted limits. Independent host-loss recovery and off-host root-key custody
 remain prerequisites before real deployment. Issue 17 remains suspended without
 a claimed correction; Issues 16 and 18 remain explicitly deferred.
+
+### MVP acceptance reopened for usability and real-provider walkthrough — 2026-10-08
+
+The User approved two additional acceptance gates after the Docker evaluation:
+[compact Kanban and Work Item detail](issues/19-compact-kanban-and-work-item-detail.md)
+and [a guided real Azure DevOps Review](issues/20-guided-real-azure-devops-review.md).
+This map is open until both are completed and the User accepts their results.
+Issue 12 and its same-host Docker operational evidence remain accepted and closed;
+the application changes require fresh checks. Issues 16 and 18 stay deferred and
+Issue 17 stays suspended. The scope does not include production deployment,
+identity merging, provider-side PR approval/merge, or the post-MVP model.
+
+- [x] Complete Issue 19 and verify the final interface.
+- [ ] Complete Issue 20 with the selected real User, Repository, pull request and AI.
+- [ ] Record User acceptance of the new gates before closing this map again.
+
+### First MVP version accepted with live walkthrough evidence — 2026-10-15
+
+The User explicitly accepted and closed the first version after confirming the
+real Factory publication worked and inspecting Azure PR 1905 thread 22906. The
+[Issue 20 resolution](issues/20-guided-real-azure-devops-review.md#first-mvp-version-accepted-by-the-user--2026-10-15)
+records actual service-hook delivery, real AI Review, complete human Review
+Decision, separate publication Approval and exact Factory/provider completion
+checks. This decision closes the additional real-provider acceptance gate and
+this map for the first MVP version. It does not change the accepted architecture,
+authorization rules or Factory state/Workflow distinctions.
+
+The separate live Review Finalization exercise for this Work Item was not run.
+The User's first-version acceptance carries it forward in
+[Issue 23](issues/23-deferred-real-provider-finalization.md) instead of presenting
+it as completed. Existing Docker/test finalization evidence remains historical.
+The runtime Work Item remains registered; closing this specification does not
+perform a Factory State Transition.
+
+The User explicitly deferred [user-experience improvements](issues/21-next-iteration-user-experience.md)
+and [review-skill quality](issues/22-next-iteration-review-skill-quality.md) to
+another iteration. These open tickets record improvement areas, not approved
+implementations or new paid experiments. Issues 16 and 18 remain deferred and
+Issue 17 remains suspended. Production recovery prerequisites, local installation
+health limits and target-project PR conflicts remain visible in their own records.
+
+- [x] Record explicit User acceptance of the first MVP version using actual live
+  evidence, retaining the accepted Docker evaluation and Issue 19 acceptance.
+- [x] Close Issue 20 and this map without claiming the remaining live exercise ran.
+- [x] Carry user experience, review-skill quality and deferred live finalization
+  into separate open follow-ups, Issues 21–23.
+
+Factory and the experiment tunnel remain stopped, and the service hook remains
+disabled with configuration/history retained. No runtime transition, additional
+AI call, target PR approval/merge or application implementation was performed for
+this documentation-only acceptance update.

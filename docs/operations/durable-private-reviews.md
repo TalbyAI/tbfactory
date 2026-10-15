@@ -70,6 +70,11 @@ Example Organization AI configuration:
 ```
 
 Supported adapters are `openrouter`, `openai-chat`, `openai-responses` and `anthropic`.
+Reasoning values are `none`, `low`, `medium`, `high`, and `max`, subject to the
+operator-approved capabilities of the selected model and adapter. For the first
+real Azure DevOps walkthrough, OpenRouter uses model `openai/gpt-6-luna` with
+`reasoningEffort: "max"` and a matching `permittedModels[].reasoning` entry. The
+effort is forwarded independently of the model ID, not appended to it.
 An operator must approve each model's tool and optional reasoning capabilities;
 this declaration is configuration, not automatic catalog discovery. Anthropic
 reasoning settings are rejected by this initial adapter. OpenRouter requests use

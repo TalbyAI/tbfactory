@@ -1,18 +1,24 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { uiRead, uiWrite } from './ui-functions';
 import { ReviewPanel } from './review-panel';
-
+import { WorkItemCard } from './work-item-card';
 type View = { id: string; [key: string]: any };
 export function TransitionBoard({
   organization,
   user,
   refreshKey,
   openItem,
+  view = 'board',
+  selectedItem,
+  repositories = [],
 }: {
   organization: string;
   user: string;
   refreshKey: string;
   openItem: (item: View) => Promise<void>;
+  view?: 'board' | 'detail' | 'settings';
+  selectedItem?: string;
+  repositories?: View[];
 }) {
   const base = `/api/organizations/${organization}`;
   const [items, setItems] = useState<View[]>([]);
@@ -23,6 +29,7 @@ export function TransitionBoard({
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
   const operations = useRef(new Map<string, string>());
   async function read(path: string) {
     const response = await uiRead({ data: { path } });
@@ -58,11 +65,14 @@ export function TransitionBoard({
     setPolicies(null);
     const cards = await all(`${base}/board?type=pull-request-review`);
     const pending: Record<string, View[]> = {};
-    for (const card of cards)
+    for (const card of cards.filter((card) => view === 'board' || card.id === selectedItem))
       pending[card.id] = await all(`${base}/work-items/${card.id}/transition-requests`);
     setItems(cards);
     setRequests(pending);
     setTypes(await read(`${base}/work-item-types`));
+    const current = cards.find((card) => card.id === selectedItem);
+    if (view === 'detail' && current) await openItem(current);
+    if (view !== 'settings') return;
     for (const [path, setter] of [
       ['teams', setTeams],
       ['policies', setPolicies],
@@ -87,7 +97,10 @@ export function TransitionBoard({
     }
   }
   useEffect(() => {
-    void refresh().catch((e) => setError((e as Error).message));
+    setLoading(true);
+    void refresh()
+      .catch((e) => setError((e as Error).message))
+      .finally(() => setLoading(false));
   }, [refreshKey]);
   const form = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -102,220 +115,266 @@ export function TransitionBoard({
     ...new Set<string>((types?.definitions ?? []).flatMap((definition: any) => definition.states)),
   ];
   return (
-    <section aria-label="Transition Board">
-      <h2>Kanban Board · pull-request-review</h2>
-      <p>
-        Factory state and Workflow Run execution state are displayed separately. Each card uses its
-        retained state-flow version.
-      </p>
+    <section
+      className={view === 'board' ? 'board-view' : 'work-view'}
+      aria-label={
+        view === 'settings'
+          ? 'Organization settings'
+          : view === 'detail'
+            ? 'Work Item actions'
+            : 'Transition Board'
+      }
+    >
+      <div className="view-heading">
+        <div>
+          <small>
+            {view === 'board'
+              ? 'PULL REQUEST REVIEWS'
+              : view === 'settings'
+                ? 'ORGANIZATION'
+                : 'REVIEW AND LIFECYCLE'}
+          </small>
+          <h2>
+            {view === 'board'
+              ? 'Kanban Board'
+              : view === 'settings'
+                ? 'Administration'
+                : 'Work Item actions'}
+          </h2>
+        </div>
+        <button
+          className="secondary"
+          disabled={busy || loading}
+          onClick={() => void perform(async () => {})}
+        >
+          {view === 'board' ? 'Refresh board' : 'Refresh'}
+        </button>
+      </div>
       {error && <p role="alert">{error}</p>}
       {message && <p role="status">{message}</p>}
-      <button className="secondary" disabled={busy} onClick={() => void perform(async () => {})}>
-        Refresh board
-      </button>
-      <div className="kanban">
-        {states.map((state) => (
-          <div className="kanban-column" key={state}>
-            <h3>{state}</h3>
-            {items
-              .filter((item) => item.state === state)
-              .map((item) => (
-                <article key={item.id} aria-label={`Work Item ${item.title}`}>
-                  <h4>{item.title}</h4>
-                  <small>
-                    {item.id} · state-flow version {item.version}
-                  </small>
-                  <p>
-                    Factory state: <strong>{item.state}</strong>
-                  </p>
-                  <p>
-                    Workflow Run execution state:{' '}
-                    <strong>
-                      {item.workflowRun?.status ??
-                        item.workflowRun?.executionState ??
-                        'No active run'}
-                    </strong>
-                  </p>
-                  <button
-                    className="secondary"
-                    disabled={busy}
-                    onClick={() => void perform(() => openItem(item))}
+      {loading && (
+        <p role="status">
+          Loading{' '}
+          {view === 'board' ? 'Board' : view === 'detail' ? 'Work Item actions' : 'administration'}…
+        </p>
+      )}
+      {!loading && !error && view === 'board' && items.length === 0 && (
+        <p>No Work Items yet. Import a pull request or create a Work Item to get started.</p>
+      )}
+      {view === 'board' && (
+        <div className="kanban">
+          {states.map((state) => (
+            <div className="kanban-column" key={state}>
+              <h3>
+                {state}
+                <span>{items.filter((item) => item.state === state).length}</span>
+              </h3>
+              {items
+                .filter((item) => item.state === state)
+                .map((item) => (
+                  <WorkItemCard
+                    key={item.id}
+                    organization={organization}
+                    item={item as Parameters<typeof WorkItemCard>[0]['item']}
+                    repositoryName={
+                      repositories.find((repository) => repository.id === item.repository)?.name
+                    }
+                    pendingApproval={(requests[item.id] ?? []).some(
+                      (request) => request.status === 'pending-approval',
+                    )}
+                  />
+                ))}
+            </div>
+          ))}
+        </div>
+      )}
+      {view === 'detail' && (
+        <div className="work-item-detail">
+          {items
+            .filter((item) => item.id === selectedItem)
+            .map((item) => (
+              <article key={item.id} aria-label={`Work Item ${item.title}`}>
+                <small>State-flow version {item.version}</small>
+                <p>
+                  Factory state: <strong>{item.state}</strong>
+                </p>
+                <p>
+                  Workflow Run execution state:{' '}
+                  <strong>
+                    {item.workflowRun?.status ??
+                      item.workflowRun?.executionState ??
+                      'No active run'}
+                  </strong>
+                </p>
+                {item.migration?.targetVersion && (
+                  <form
+                    aria-label="Migrate Work Item type version"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void perform(async () => {
+                        const result = await write(
+                          `${base}/work-items/${item.id}/type-migrations`,
+                          {
+                            expectedState: item.state,
+                            expectedVersion: item.version,
+                            targetVersion: item.migration.targetVersion,
+                            expectedTransitionSequence: item.transitionSequence ?? 0,
+                          },
+                        );
+                        setMessage(
+                          `Work Item migrated to type version ${result.workItem.version}. Factory state and history were preserved.`,
+                        );
+                      });
+                    }}
                   >
-                    Open history
-                  </button>
-                  {item.migration?.targetVersion && (
-                    <form
-                      aria-label="Migrate Work Item type version"
-                      onSubmit={(event) => {
-                        event.preventDefault();
-                        void perform(async () => {
-                          const result = await write(
-                            `${base}/work-items/${item.id}/type-migrations`,
-                            {
-                              expectedState: item.state,
-                              expectedVersion: item.version,
-                              targetVersion: item.migration.targetVersion,
-                              expectedTransitionSequence: item.transitionSequence ?? 0,
-                            },
-                          );
-                          setMessage(
-                            `Work Item migrated to type version ${result.workItem.version}. Factory state and history were preserved.`,
-                          );
-                        });
-                      }}
-                    >
-                      <p>Explicit migration to type version {item.migration.targetVersion}.</p>
-                      {item.migration.requiresApproval && (
-                        <p>Current policy requires a human operator.</p>
-                      )}
-                      {item.migration.available ? (
-                        <button disabled={busy}>Migrate Work Item version</button>
-                      ) : (
-                        <p>{item.migration.reason}</p>
-                      )}
-                    </form>
-                  )}
-                  {!item.transitions.length && <p>No transitions in this retained version.</p>}
-                  {[3, 4, 5].includes(item.version) && (
-                    <ReviewPanel
-                      organization={organization}
-                      item={
-                        item as {
-                          id: string;
-                          title: string;
-                          version: number;
-                          publicationMode?: string;
-                        }
+                    <p>Explicit migration to type version {item.migration.targetVersion}.</p>
+                    {item.migration.requiresApproval && (
+                      <p>Current policy requires a human operator.</p>
+                    )}
+                    {item.migration.available ? (
+                      <button disabled={busy}>Migrate Work Item version</button>
+                    ) : (
+                      <p>{item.migration.reason}</p>
+                    )}
+                  </form>
+                )}
+                {!item.transitions.length && <p>No transitions in this retained version.</p>}
+                {[3, 4, 5].includes(item.version) && (
+                  <ReviewPanel
+                    organization={organization}
+                    item={
+                      item as {
+                        id: string;
+                        title: string;
+                        version: number;
+                        publicationMode?: string;
                       }
-                      onChange={refresh}
-                    />
-                  )}
-                  {item.transitions.map((transition: any) => (
-                    <form
-                      key={transition.id}
-                      aria-label={transition.id}
-                      onSubmit={(event) => {
-                        const data = form(event);
-                        void perform(async () => {
-                          const inputs = Object.fromEntries(
-                            transition.inputs.map((name: string) => [name, data.get(name)]),
-                          );
-                          const result = await write(
-                            `${base}/work-items/${item.id}/transition-requests`,
-                            {
-                              transition: transition.id,
-                              expectedState: item.state,
-                              version: item.version,
-                              inputs,
-                            },
-                          );
-                          setMessage(
-                            result.completed
-                              ? 'State Transition completed.'
-                              : result.workflowRun?.workflow === 'review-finalization-v1'
-                                ? 'Review Finalization Workflow accepted. Factory state is unchanged.'
-                                : result.workflowRun
-                                  ? 'Review Intake Workflow accepted. Factory state is unchanged.'
-                                  : 'Transition Request accepted; awaiting Approval. Factory state is unchanged.',
-                          );
-                          await openItem(result.workItem);
-                        });
-                      }}
-                    >
-                      <h4>{transition.id}</h4>
-                      {transition.prerequisites.length > 0 && (
-                        <p>Prerequisites: {transition.prerequisites.join('; ')}</p>
+                    }
+                    onChange={refresh}
+                  />
+                )}
+                {item.transitions.map((transition: any) => (
+                  <form
+                    key={transition.id}
+                    aria-label={transition.id}
+                    onSubmit={(event) => {
+                      const data = form(event);
+                      void perform(async () => {
+                        const inputs = Object.fromEntries(
+                          transition.inputs.map((name: string) => [name, data.get(name)]),
+                        );
+                        const result = await write(
+                          `${base}/work-items/${item.id}/transition-requests`,
+                          {
+                            transition: transition.id,
+                            expectedState: item.state,
+                            version: item.version,
+                            inputs,
+                          },
+                        );
+                        setMessage(
+                          result.completed
+                            ? 'State Transition completed.'
+                            : result.workflowRun?.workflow === 'review-finalization-v1'
+                              ? 'Review Finalization Workflow accepted. Factory state is unchanged.'
+                              : result.workflowRun
+                                ? 'Review Intake Workflow accepted. Factory state is unchanged.'
+                                : 'Transition Request accepted; awaiting Approval. Factory state is unchanged.',
+                        );
+                        await openItem(result.workItem);
+                      });
+                    }}
+                  >
+                    <h4>{transition.id}</h4>
+                    {transition.prerequisites.length > 0 && (
+                      <p>Prerequisites: {transition.prerequisites.join('; ')}</p>
+                    )}
+                    {transition.available ? (
+                      <>
+                        {transition.requiresApproval && (
+                          <p>Activity-bound human Approval required.</p>
+                        )}
+                        {transition.inputs.map((name: string) => (
+                          <label key={name}>
+                            {name}
+                            {name.endsWith('Fact') ? (
+                              <input
+                                name={name}
+                                required
+                                readOnly
+                                value={item.readinessFact ?? ''}
+                              />
+                            ) : name === 'reportVersion' ? (
+                              <input
+                                name={name}
+                                required
+                                readOnly
+                                value={transition.currentReportVersion ?? ''}
+                              />
+                            ) : (
+                              <textarea name={name} required maxLength={10000} />
+                            )}
+                          </label>
+                        ))}
+                        <button disabled={busy}>Request {transition.id}</button>
+                      </>
+                    ) : (
+                      <p>{transition.reason}</p>
+                    )}
+                  </form>
+                ))}
+                {(requests[item.id] ?? [])
+                  .filter((request) => request.status !== 'completed')
+                  .map((request) => (
+                    <div key={request.id}>
+                      <p>
+                        Transition Request: {request.transition} · <strong>{request.status}</strong>
+                      </p>
+                      {request.status === 'pending-approval' && (
+                        <button
+                          disabled={busy}
+                          onClick={() =>
+                            void perform(async () => {
+                              await write(
+                                `${base}/work-items/${item.id}/transition-requests/${request.id}/approve`,
+                                {},
+                              );
+                              setMessage(
+                                'Activity approved. Execution still requires current permission.',
+                              );
+                            })
+                          }
+                        >
+                          Approve {request.transition}
+                        </button>
                       )}
-                      {transition.available ? (
-                        <>
-                          {transition.requiresApproval && (
-                            <p>Activity-bound human Approval required.</p>
-                          )}
-                          {transition.inputs.map((name: string) => (
-                            <label key={name}>
-                              {name}
-                              {name.endsWith('Fact') ? (
-                                <input
-                                  name={name}
-                                  required
-                                  readOnly
-                                  value={item.readinessFact ?? ''}
-                                />
-                              ) : name === 'reportVersion' ? (
-                                <input
-                                  name={name}
-                                  required
-                                  readOnly
-                                  value={transition.currentReportVersion ?? ''}
-                                />
-                              ) : (
-                                <textarea name={name} required maxLength={10000} />
-                              )}
-                            </label>
-                          ))}
-                          <button disabled={busy}>Request {transition.id}</button>
-                        </>
-                      ) : (
-                        <p>{transition.reason}</p>
-                      )}
-                    </form>
-                  ))}
-                  {(requests[item.id] ?? [])
-                    .filter((request) => request.status !== 'completed')
-                    .map((request) => (
-                      <div key={request.id}>
-                        <p>
-                          Transition Request: {request.transition} ·{' '}
-                          <strong>{request.status}</strong>
-                        </p>
-                        {request.status === 'pending-approval' && (
+                      {request.status === 'approved' &&
+                        request.user === user &&
+                        !request.credential && (
                           <button
                             disabled={busy}
                             onClick={() =>
                               void perform(async () => {
-                                await write(
-                                  `${base}/work-items/${item.id}/transition-requests/${request.id}/approve`,
+                                const result = await write(
+                                  `${base}/work-items/${item.id}/transition-requests/${request.id}/execute`,
                                   {},
                                 );
-                                setMessage(
-                                  'Activity approved. Execution still requires current permission.',
-                                );
+                                setMessage('State Transition completed.');
+                                await openItem(result.workItem);
                               })
                             }
                           >
-                            Approve {request.transition}
+                            Execute {request.transition}
                           </button>
                         )}
-                        {request.status === 'approved' &&
-                          request.user === user &&
-                          !request.credential && (
-                            <button
-                              disabled={busy}
-                              onClick={() =>
-                                void perform(async () => {
-                                  const result = await write(
-                                    `${base}/work-items/${item.id}/transition-requests/${request.id}/execute`,
-                                    {},
-                                  );
-                                  setMessage('State Transition completed.');
-                                  await openItem(result.workItem);
-                                })
-                              }
-                            >
-                              Execute {request.transition}
-                            </button>
-                          )}
-                        {request.credential && (
-                          <p>Execution must use the original API credential.</p>
-                        )}
-                      </div>
-                    ))}
-                </article>
-              ))}
-          </div>
-        ))}
-      </div>
-      {types && (
+                      {request.credential && <p>Execution must use the original API credential.</p>}
+                    </div>
+                  ))}
+              </article>
+            ))}
+        </div>
+      )}
+      {view === 'settings' && types && (
         <details>
           <summary>Work Item Type selection</summary>
           <form
@@ -358,7 +417,7 @@ export function TransitionBoard({
           </form>
         </details>
       )}
-      {teams && (
+      {view === 'settings' && teams && (
         <details>
           <summary>Manage Teams</summary>
           <p>Teams operate across this Organization's Projects and Repositories.</p>
@@ -410,7 +469,7 @@ export function TransitionBoard({
           ))}
         </details>
       )}
-      {policies && (
+      {view === 'settings' && policies && (
         <details>
           <summary>Manage scoped policies</summary>
           <form

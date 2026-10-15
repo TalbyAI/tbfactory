@@ -32,10 +32,10 @@ export class Authentication {
     const issuer = new URL(config.issuer);
     const callback = new URL(config.callback);
     const loopback = (url: URL) => ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname);
-    if (
-      (issuer.protocol !== 'https:' || callback.protocol !== 'https:') &&
-      !(config.allowLoopbackHttp && loopback(issuer) && loopback(callback))
-    )
+    const allowed = (url: URL) =>
+      url.protocol === 'https:' ||
+      (config.allowLoopbackHttp && url.protocol === 'http:' && loopback(url));
+    if (!allowed(issuer) || !allowed(callback))
       throw new Error('OIDC requires HTTPS; explicit loopback HTTP is development-only');
     const clientAuthentication =
       config.clientAuthentication === 'client_secret_basic'

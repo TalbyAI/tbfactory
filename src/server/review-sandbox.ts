@@ -54,6 +54,7 @@ export class RepositorySandbox {
   readonly sandbox: DockerSandbox;
   private baseline = '';
   private signal?: AbortSignal;
+  private commandSlot = Promise.resolve();
   constructor(
     readonly run: Run,
     readonly image: string,
@@ -81,15 +82,23 @@ export class RepositorySandbox {
     });
   }
   private async execute(command: string, args: string[], env?: Record<string, string>) {
-    const result = await this.sandbox.executeCommand!(command, args, {
-      cwd: '/workspace',
-      timeout: 30000,
-      env,
-      maxRetainedBytes: 32768,
-      abortSignal: this.signal,
+    // Git and Node threads share the sandbox's fixed PID limit.
+    const pending = this.commandSlot.then(async () => {
+      const result = await this.sandbox.executeCommand!(command, args, {
+        cwd: '/workspace',
+        timeout: 30000,
+        env,
+        maxRetainedBytes: 32768,
+        abortSignal: this.signal,
+      });
+      if (result.exitCode !== 0) fail(503, 'Sandbox operation failed');
+      return result.stdout.trim();
     });
-    if (result.exitCode !== 0) fail(503, 'Sandbox operation failed');
-    return result.stdout.trim();
+    this.commandSlot = pending.then(
+      () => {},
+      () => {},
+    );
+    return pending;
   }
   async prepare(
     access: Record<string, any>,

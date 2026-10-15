@@ -536,6 +536,166 @@ test('Imported pull requests keep exclusive incomplete intake across worker/data
   }
 });
 
+test('An observed intake preserves its receipt when configuration changes before handoff', async () => {
+  const r = await reviewRuntime();
+  try {
+    const service = serviceUser('alpha');
+    await setPolicy(r.f.store, {
+      organization: 'alpha',
+      user: service,
+      activity: 'review.generate',
+      scope: 'organization',
+      scopeId: 'alpha',
+      effect: 'human',
+    });
+    for (const activity of ['transition.request-review', 'review.generate', 'repository.read'])
+      await setPolicy(r.f.store, {
+        organization: 'alpha',
+        user: service,
+        activity,
+        scope: 'organization',
+        scopeId: 'alpha',
+        effect: 'allow',
+      });
+    await r.configure({ enabled: false });
+    await r.f.request('/api/organizations/alpha/work-item-types', {
+      operationId: 'select',
+      type: 'pull-request-review',
+      version: 3,
+      enabled: true,
+    });
+    const source = sourceInput('azure-devops');
+    await putSource(r.f.store, r.secrets, source);
+    const payload = observation('azure-devops') as any;
+    Object.assign(payload.resource, {
+      sourceRefName: 'refs/heads/feature',
+      targetRefName: 'refs/heads/main',
+      lastMergeSourceCommit: { commitId: r.head },
+      lastMergeTargetCommit: { commitId: r.target },
+    });
+    const response = await handleHttp(delivery(source, payload), {
+      auth: r.f.auth,
+      factory: r.f.factory,
+      origin: 'http://localhost:3000',
+      allowLoopbackHttp: true,
+      secrets: r.secrets,
+    });
+    assert.equal(response.status, 200);
+    const imported = (await response.json()) as any;
+    const path = `/api/organizations/alpha/work-items/${imported.workItemId}`;
+    await r.startWorker();
+    const pending = await r.wait(path, 'waiting-inputs');
+    const receipts = () =>
+      r.f.store.transaction((tx) =>
+        tx.list('receipt', 'organization = $organization AND operation = $operation', {
+          organization: 'alpha',
+          operation: 'automatic-review-v1',
+        }),
+      );
+    const original = await receipts();
+    assert.equal(original.length, 1);
+    await r.configure({ rules: { ...r.configInput.rules, enabled: true } });
+    const view = await r.wait(path, 'waiting-approval', 5000);
+    assert.equal(view.runs.length, 2);
+    const intake = view.runs.find((run: any) => run.id === pending.runs[0].id);
+    const review = view.runs.find((run: any) => run.status === 'waiting-approval');
+    assert.equal(intake.status, 'completed');
+    assert.equal(intake.handoff, review.id);
+    assert.equal((await r.f.request(path)).body.activeRun.id, review.id);
+    assert.equal(r.requests.length, 0);
+    assert.deepEqual(await receipts(), original);
+    await r.stopWorker();
+    await r.startWorker();
+    const restarted = await r.wait(path, 'waiting-approval');
+    assert.equal(restarted.runs.length, 2);
+    assert.equal(r.requests.length, 0);
+  } finally {
+    await r.close();
+  }
+});
+
+test('A human review request reuses the automatic receipt without changing its recorded identity', async () => {
+  const r = await reviewRuntime();
+  try {
+    await r.configure({
+      mode: 'platform',
+      entitled: true,
+      rules: { ...r.configInput.rules, enabled: true },
+    });
+    const service = serviceUser('alpha');
+    for (const activity of ['transition.request-review', 'review.generate', 'repository.read'])
+      await setPolicy(r.f.store, {
+        organization: 'alpha',
+        user: service,
+        activity,
+        scope: 'organization',
+        scopeId: 'alpha',
+        effect: 'allow',
+      });
+    for (const user of [service, r.f.alice.user.id])
+      await setPolicy(r.f.store, {
+        organization: 'alpha',
+        user,
+        activity: 'review.generate',
+        scope: 'organization',
+        scopeId: 'alpha',
+        effect: 'human',
+      });
+    const path = await r.createItem('manual-after-automatic');
+    await r.startWorker();
+    const first = await r.wait(path, 'waiting-approval');
+    const automatic = first.runs.find((run: any) => run.status === 'waiting-approval');
+    assert.equal(automatic.identity.kind, 'service');
+    const receipts = () =>
+      r.f.store.transaction((tx) =>
+        tx.list('receipt', 'organization = $organization AND operation = $operation', {
+          organization: 'alpha',
+          operation: 'automatic-review-v1',
+        }),
+      );
+    const original = await receipts();
+    assert.equal(original.length, 1);
+    await r.stopWorker();
+    assert.equal(
+      (
+        await r.f.request(`${path}/review-supersession`, {
+          operationId: 'supersede-automatic',
+          run: automatic.id,
+        })
+      ).status,
+      200,
+    );
+    const requested = await startReview(r, path, 'manual-retry');
+    assert.equal(requested.status, 200);
+    await r.f.store.transaction(async (tx) => {
+      const intake = (await tx.get('workflow_run', requested.body.workflowRun.id))!;
+      await tx.put('workflow_run', {
+        ...intake,
+        data: {
+          ...(intake.data as object),
+          status: 'waiting-prerequisites',
+          error: 'Earlier handoff failed',
+        },
+      });
+    });
+    await r.startWorker();
+    const pending = await r.wait(path, 'waiting-approval', 5000);
+    const manual = pending.runs.find((run: any) => run.status === 'waiting-approval');
+    assert.equal(manual.identity.kind, 'user');
+    assert.equal(manual.error, undefined);
+    assert.equal(
+      pending.runs.find((run: any) => run.id === requested.body.workflowRun.id).error,
+      'Earlier handoff failed',
+    );
+    assert.equal(manual.calls, 0);
+    assert.equal(r.requests.length, 0);
+    assert.deepEqual(await receipts(), original);
+    assert.equal((await r.f.request(path)).body.activeRun.id, manual.id);
+  } finally {
+    await r.close();
+  }
+});
+
 test('Generation Approval, current revocation and empty-report human waits remain distinct', async () => {
   const r = await reviewRuntime();
   try {
@@ -1038,7 +1198,7 @@ test('Confirmed-stop intake recovery keeps exclusive ownership and completes one
   }
 });
 
-test('OpenRouter enforces explicit upstream routing and retains reported cost', async () => {
+test('OpenRouter forwards max reasoning effort, enforces upstream routing and retains reported cost', async () => {
   const r = await reviewRuntime();
   try {
     r.behavior('report');
@@ -1048,8 +1208,8 @@ test('OpenRouter enforces explicit upstream routing and retains reported cost', 
         adapter: 'openrouter',
         model: 'openai/fixture-model',
         upstream: 'openai',
-        permittedModels: [{ id: 'openai/fixture-model', tools: true, reasoning: ['low'] }],
-        reasoningEffort: 'low',
+        permittedModels: [{ id: 'openai/fixture-model', tools: true, reasoning: ['max'] }],
+        reasoningEffort: 'max',
       },
     });
     const path = await r.createItem('openrouter');
@@ -1061,7 +1221,7 @@ test('OpenRouter enforces explicit upstream routing and retains reported cost', 
       allow_fallbacks: false,
       require_parameters: true,
     });
-    assert.deepEqual(r.requests[0].body.reasoning, { effort: 'low' });
+    assert.deepEqual(r.requests[0].body.reasoning, { effort: 'max' });
     assert.equal(view.consumption[0].cost, 0.0001);
   } finally {
     await r.close();
