@@ -3310,3 +3310,43 @@ Issue 20 and the MVP specification now have State closed by explicit User
 acceptance of the first version. The unchecked live finalization exercise has not
 been marked complete; its separate open ticket preserves the remaining work. All
 historical comments, unsuccessful/uncertain attempts and original evidence remain.
+
+### MVP branch preparation and saved local acceptance changes — 2026-10-15
+
+The User requested saving local changes and identifying the implementation branches
+that should be prepared for a pull request. The acceptance update and follow-ups
+were committed as 1645bbb48e010dc8ba8a5681d58d4920970c2b65 on
+feat/mvp-first-review-experience. The branch was pushed normally to origin and its
+remote head was verified; no pull request was created and main was not modified.
+
+After fetching origin, main remains at e32d44807ae08ea9614526e8a8f9cfaee4a51f68.
+The sole pending MVP implementation branch is feat/mvp-first-review-experience:
+its commits deliver the first real Review experience, explicitly opted-in HTTP
+localhost OIDC callbacks, sandbox/resource and intake regressions, and first-version
+acceptance with recorded follow-ups. The branch contains origin/main and the
+read-only merge analysis is clean. The earlier implement/*, fix/* and
+integration/factory-mvp-acceptance branches are already ancestors of origin/main;
+they do not require additional implementation PRs.
+
+The clean worktree branch t3code/diagnose-worker-ownership-recovery retains one
+unmerged diagnostic commit f5f36a9, while missing 19 main commits. It is separate
+from the MVP delivery and remains associated with suspended Issue 17. It was not
+merged, rebased, deleted or included in the candidate branch. All existing local
+branches and both worktrees are retained.
+
+Fresh verification for the candidate passed root format:check, typecheck,
+production build, whitespace checks and seven directed tests covering OIDC
+transport, repository-tool output/path behavior, sandbox command serialization
+and Board navigation/cards. The build reports dependency use-client bundling
+warnings but exits 0. Full npm test was not run: automatic approval review rejected
+starting the isolated tbfactory-acceptance-db container with “blocked by policy”.
+The User explicitly chose to leave the complete suite pending. The rejection was
+not retried through an alternative mechanism, and no test failure or full-suite
+success is inferred. Factory and the experiment tunnel remain stopped.
+
+Nonsecret verification logs: logs/mvp-pr-typecheck-20261015.log,
+logs/mvp-pr-build-20261015.log, logs/mvp-pr-unit-tests-20261015.log and
+logs/mvp-branch-inventory-20261015.json. Prepare one PR from
+feat/mvp-first-review-experience to main; the pending full-suite validation must
+remain visible in its validation notes. This documentation-only preparation
+record does not reopen accepted MVP scope or authorize a PR merge.
