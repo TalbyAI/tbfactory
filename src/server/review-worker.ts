@@ -627,6 +627,7 @@ export class ReviewWorker {
           ...intake.data,
           workflow: 'review-v1',
           status: generate.requiresHuman ? 'waiting-approval' : 'queued',
+          error: undefined,
           token: randomUUID(),
           inputs: {
             fields: inputs.fields,
@@ -647,7 +648,16 @@ export class ReviewWorker {
         const receiptId = digest(
           stable(['automatic-review-v1', item.id, inputs.cause.id, config.version]),
         );
-        if (!(await tx.get('receipt', receiptId)))
+        const receipts = await tx.list(
+          'receipt',
+          'organization = $organization AND operation = $operation AND clientId = $clientId',
+          {
+            organization: item.organization,
+            operation: 'automatic-review-v1',
+            clientId: inputs.cause.id,
+          },
+        );
+        if (!receipts.length)
           await tx.create('receipt', {
             id: receiptId,
             organization: item.organization,
@@ -939,7 +949,16 @@ export class ReviewWorker {
           const receiptId = digest(
             stable(['automatic-review-v1', item.id, cause.id, config.version]),
           );
-          if (await tx.get('receipt', receiptId)) continue;
+          const receipts = await tx.list(
+            'receipt',
+            'organization = $organization AND operation = $operation AND clientId = $clientId',
+            {
+              organization: item.organization,
+              operation: 'automatic-review-v1',
+              clientId: cause.id,
+            },
+          );
+          if (receipts.length) continue;
           const caller = {
             user: serviceUser(String(record.organization)),
             human: false,

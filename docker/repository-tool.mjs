@@ -5,7 +5,7 @@ import { resolve } from 'node:path';
 // Fixed installation code; repository contents never supply executable tools.
 const input = JSON.parse(Buffer.from(process.argv[2], 'base64url').toString());
 const root = '/workspace/repository';
-const path = (name) => {
+const pathName = (name) => {
   if (
     typeof name !== 'string' ||
     !name ||
@@ -14,7 +14,10 @@ const path = (name) => {
     name.split('/').some((p) => !p || p === '.' || p === '..' || p === '.git')
   )
     throw Error('Repository path denied');
-  const actual = realpathSync(resolve(root, name));
+  return name;
+};
+const path = (name) => {
+  const actual = realpathSync(resolve(root, pathName(name)));
   if (!actual.startsWith(`${root}/`) || !statSync(actual).isFile())
     throw Error('Repository path denied');
   return actual;
@@ -31,6 +34,7 @@ const git = (args) =>
       'diff.external=',
       '-c',
       'core.pager=cat',
+      '--literal-pathspecs',
       ...args,
     ],
     {
@@ -86,16 +90,14 @@ else if (input.operation === 'changes')
     '--',
   ]);
 else if (input.operation === 'diff') {
-  path(input.path);
-  output = git([
-    'diff',
-    '--no-ext-diff',
-    '--no-textconv',
-    input.base,
-    input.source,
-    '--',
-    input.path,
-  ]);
+  const name = pathName(input.path);
+  if (
+    ![input.base, input.source].some(
+      (ref) => git(['ls-tree', '--format=%(objecttype)', ref, '--', name]).trim() === 'blob',
+    )
+  )
+    throw Error('Repository path denied');
+  output = git(['diff', '--no-ext-diff', '--no-textconv', input.base, input.source, '--', name]);
 } else throw Error('Repository operation denied');
 let truncated = false;
 while (Buffer.byteLength(JSON.stringify({ output, truncated })) > 24000) {

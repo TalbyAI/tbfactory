@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile, unlink } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
@@ -60,4 +60,50 @@ test('Repository tools serialize large and escaped Git output within sandbox ret
       assert.equal(response.truncated, false);
     }
   }
+});
+
+test('Diff can inspect deleted tracked files while rejecting traversal and unmatched literal paths', async () => {
+  const directory = resolve('.runtime', `repository-deleted-${randomUUID()}`);
+  await mkdir(directory, { recursive: true });
+  const git = (args: string[]) =>
+    execFileSync('git', args, { cwd: directory, encoding: 'utf8', windowsHide: true }).trim();
+  git(['init', '-b', 'main']);
+  git(['config', 'user.email', 'fixture@example.test']);
+  git(['config', 'user.name', 'Fixture']);
+  git(['config', 'core.autocrlf', 'false']);
+  await writeFile(join(directory, 'removed.ts'), 'export const value = 1;\n');
+  git(['add', '.']);
+  git(['commit', '-m', 'Base']);
+  const base = git(['rev-parse', 'HEAD']);
+  await unlink(join(directory, 'removed.ts'));
+  git(['add', '.']);
+  git(['commit', '-m', 'Delete tracked file']);
+  const source = git(['rev-parse', 'HEAD']);
+  const diff = (path: string) =>
+    execFileSync(
+      'docker',
+      [
+        'run',
+        '--rm',
+        '--network',
+        'none',
+        '--mount',
+        `type=bind,source=${directory},target=/workspace/repository,readonly`,
+        '--mount',
+        `type=bind,source=${resolve('docker/repository-tool.mjs')},target=/opt/factory/repository-tool.mjs,readonly`,
+        'tbfactory-review:local',
+        'node',
+        '/opt/factory/repository-tool.mjs',
+        Buffer.from(JSON.stringify({ operation: 'diff', path, base, source })).toString(
+          'base64url',
+        ),
+      ],
+      { encoding: 'utf8', windowsHide: true, stdio: 'pipe' },
+    );
+  const result = JSON.parse(diff('removed.ts'));
+  assert.match(result.output, /deleted file mode/);
+  assert.match(result.output, /-export const value = 1;/);
+  assert.equal(result.truncated, false);
+  for (const path of ['../removed.ts', '/removed.ts', '.git/config', 'missing.ts', ':(glob)*'])
+    assert.throws(() => diff(path));
 });
