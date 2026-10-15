@@ -3,6 +3,7 @@
 Status: ready-for-human
 State: closed
 Type: AFK
+Labels: wayfinder:task
 Assignee: Codex
 
 ## Parent

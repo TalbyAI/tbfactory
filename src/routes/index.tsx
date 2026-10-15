@@ -271,7 +271,11 @@ function FactoryPage() {
                         refreshKey={`${item?.id}:${item?.state}:${item?.transitionSequence ?? 0}`}
                         openItem={async (current) => {
                           setItem(current);
-                          await historyPage(current);
+                          if (
+                            current.id !== item?.id ||
+                            current.transitionSequence !== item?.transitionSequence
+                          )
+                            await historyPage(current);
                         }}
                       />
                     )}
@@ -296,8 +300,6 @@ function FactoryPage() {
                                   ? { publicationMode: data.get('publicationMode') }
                                   : {}),
                               });
-                              setItem(created.workItem);
-                              await historyPage(created.workItem);
                               location.assign(
                                 `/?organization=${organization}&workItem=${created.workItem.id}`,
                               );
@@ -363,8 +365,6 @@ function FactoryPage() {
                               const existing = await read(
                                 `${base}/work-items/${encodeURIComponent(String(data.get('id')))}`,
                               );
-                              setItem(existing);
-                              await historyPage(existing);
                               location.assign(
                                 `/?organization=${organization}&workItem=${existing.id}`,
                               );
