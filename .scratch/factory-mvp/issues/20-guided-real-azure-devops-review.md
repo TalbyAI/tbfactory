@@ -1,7 +1,7 @@
 # Guide the first real Azure DevOps Review with the existing User
 
 Status: ready-for-human
-State: open
+State: closed
 Type: HITL
 Assignee: Codex
 
@@ -33,13 +33,22 @@ troubleshooting and a guided session in Spanish when requested:
 
 - [x] Prepare the walkthrough against final UI labels and actual supported commands.
 - [x] Record nonsecret Repository/PR, tenant, installation, model and budget choices.
-- [ ] Keep real credentials outside Git, chat, screenshots and logs; preserve the
+- [x] Keep real credentials outside Git, chat, screenshots and logs; preserve the
   existing Organization-owned encrypted credential boundaries.
 - [x] Validate Microsoft OIDC compatibility and Membership without identity merging.
-- [ ] Confirm actual service-hook delivery and real, isolated repository checkout.
-- [ ] Confirm a real model report and complete human Review Decision.
-- [ ] Record the explicitly chosen publication outcome and separate finalization.
-- [ ] Record executed results and remaining limits before closing this ticket or MVP.
+- [x] Confirm actual service-hook delivery and real, isolated repository checkout.
+- [x] Confirm a real model report and complete human Review Decision.
+- [x] Record the explicitly authorized publication and verify the actual provider comment.
+- [ ] Execute separate finalization on this real-provider Work Item; deferred at
+  first-version acceptance to [Issue 23](23-deferred-real-provider-finalization.md).
+- [x] Record executed results, remaining limits and explicit User acceptance before
+  closing this ticket and the first MVP version.
+
+The User explicitly accepted and closed the first MVP version on 2026-10-15 after
+manually inspecting the real publication. The unchecked finalization exercise is
+tracked separately and is not claimed as executed by this walkthrough. This dated
+acceptance supersedes the earlier instruction to leave this ticket open for that
+remaining exercise; historical comments and evidence remain unchanged.
 
 ## Assumptions and prerequisites
 
@@ -3256,3 +3265,48 @@ for the injected fault, not a fresh assessment of the reverted source/current
 main; hook-disabled updates were not imported. No additional paid Review is
 authorized. Separate Factory finalization and remaining real acceptance work stay
 pending. Issue 20 and the MVP remain open.
+
+### First MVP version accepted by the User — 2026-10-15
+
+After manually inspecting the real Factory-published Finding, the User explicitly
+confirmed the Factory works and accepted closure of its first MVP version. The
+User acknowledged remaining MVP issues and deferred user-experience improvements
+and review-skill quality to another iteration. This decision supersedes the
+previous instruction to keep this acceptance ticket and the MVP map open until
+all remaining live walkthrough steps were executed.
+
+This closure rests on the actual real-provider results recorded above: Microsoft
+OIDC and explicit Membership, authenticated stable-HTTPS service-hook delivery,
+real isolated commit checkout, budget-authorized AI Review with
+openai/gpt-6-luna / reasoningEffort high, complete human Review Decision, separate
+publication request and human Approval, Factory worker publication, exact provider
+read-back and the User's manual inspection. Report ce1297d5e363, Decision
+43c05f27-7896-4a37-bc51-2ff819b9a26f and completed Activity 06d11a660eef are
+retained. Azure PR 1905 thread 22906 contains the confirmed Finding. No fixture is
+being promoted to live evidence and no additional paid call was made for closure.
+
+Acceptance is explicitly bounded: the separate Review Finalization Workflow did
+NOT run on this real-provider Work Item, which remains registered in the retained
+installation. It is carried forward in
+[Issue 23](23-deferred-real-provider-finalization.md), with resumption prerequisites
+and renewed evidence/budget requirements. Historical Docker finalization evidence
+remains distinct. This is product-version acceptance, not a runtime State Transition,
+a production-readiness claim, or proof of general review quality.
+
+Next-iteration improvement areas are recorded without designing or implementing
+them:
+
+- [Issue 21: user experience](21-next-iteration-user-experience.md).
+- [Issue 22: review-skill quality](22-next-iteration-review-skill-quality.md).
+
+Issues 16 and 18 remain deferred and Issue 17 remains suspended without a claimed
+fix. Existing production recovery prerequisites and overdue backup/drill health
+remain recorded. Factory and ngrok stay stopped; the hook stays disabled and all
+credentials/data/evaluation/history remain retained. The additive target-project
+revert is complete; its unrelated source/main conflicts and remote policies remain
+outside this Factory acceptance decision. No PR approval or merge was performed.
+
+Issue 20 and the MVP specification now have State closed by explicit User
+acceptance of the first version. The unchecked live finalization exercise has not
+been marked complete; its separate open ticket preserves the remaining work. All
+historical comments, unsuccessful/uncertain attempts and original evidence remain.
